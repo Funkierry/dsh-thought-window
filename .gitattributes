@@ -1,0 +1,5 @@
+# Preserve the verified release source and prebuilt bundle byte-for-byte.
+* -text
+*.png binary
+*.gif binary
+*.webm binary

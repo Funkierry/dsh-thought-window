@@ -1,0 +1,15 @@
+{
+  "name": "dsh-thought-window",
+  "version": "0.7.0",
+  "description": "Pixel-style public traces, file deliverables and run logs for DeepSeek Harness Web",
+  "type": "module",
+  "main": "./lib/index.js",
+  "exports": {".": "./lib/index.js", "./client": "./lib/client.js", "./package.json": "./package.json", "./cordis.patch.yml": "./cordis.patch.yml"},
+  "files": ["lib", "src", "scripts", "test", "cordis.patch.yml", "README.md", "NOTICE.md", "LICENSE"],
+  "scripts": {"build": "node scripts/build.mjs", "test": "node --test test/*.test.cjs", "prepack": "node scripts/build.mjs"},
+  "license": "MIT",
+  "dsh": {
+    "bundle": {"patch": "./cordis.patch.yml"},
+    "client": {"inject": ["@deepseek-ai/dsh-client-ui-conversation", "@deepseek-ai/dsh-client-ui-chat"], "platform": "web"}
+  }
+}
