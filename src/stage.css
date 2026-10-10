@@ -45,6 +45,14 @@ body.tw-stage-host :has(>[data-slot=sidebar]){visibility:hidden;overflow:hidden;
 .tw-stage-plot{position:relative;flex:1;min-height:0;margin-top:8px}
 .tw-hud{flex:none;display:flex;flex-wrap:wrap;gap:2px 14px;margin:12px 10px 0;padding:0 0 5px;border-bottom:1px dashed color-mix(in srgb,var(--line) 70%,transparent);font-size:10px;line-height:16px;font-variant-numeric:tabular-nums;color:var(--ink);min-width:0;overflow:hidden;max-height:38px}
 .tw-hud+.tw-stage-plot{margin-top:2px}
+.tw-stage-pages{flex:none;display:flex;align-items:center;gap:5px;margin:12px 10px 0;padding-bottom:6px;border-bottom:1px dashed var(--line);min-width:0}
+.tw-hud+.tw-stage-pages{margin-top:5px}
+.tw-stage-pages+.tw-stage-plot{margin-top:2px}
+.tw-window .tw-stage-pages button,.tw-window .tw-stage-pages select{font:inherit;font-size:10px;line-height:18px;border:1px solid var(--line);background:var(--paper);color:var(--ink);padding:1px 6px;border-radius:0}
+.tw-window .tw-stage-pages select{flex:1;min-width:0;width:0;text-overflow:ellipsis;color:var(--accent)}
+.tw-window .tw-stage-pages button{flex:none;white-space:nowrap}
+.tw-stage-pages small{font-size:9px;white-space:nowrap;color:var(--muted)}
+@container thought (max-width:520px){.tw-stage-pages small{display:none}.tw-stage-pages{margin-inline:5px;gap:3px}.tw-window .tw-stage-pages button{padding-inline:4px}}
 .tw-window .tw-stage-outline-btn{position:absolute;z-index:4;right:8px;bottom:6px;border:1px solid var(--accent);background:var(--paper);color:var(--accent);font:inherit;font-size:10px;line-height:16px;padding:0 7px;cursor:pointer;letter-spacing:.4px}
 .tw-window .tw-stage-answer-btn{position:absolute;z-index:4;right:118px;bottom:6px;border:1px solid var(--line);background:var(--paper);color:var(--ink);font:inherit;font-size:10px;line-height:16px;padding:0 7px;cursor:pointer;letter-spacing:.4px}
 .tw-window .tw-stage-answer-btn:hover{border-color:var(--accent);color:var(--accent)}

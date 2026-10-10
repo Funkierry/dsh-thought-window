@@ -1,6 +1,6 @@
 {
   "name": "dsh-thought-window",
-  "version": "0.14.2",
+  "version": "0.14.3",
   "description": "Pixel-style live reasoning stage for DeepSeek Harness Web, with a model-directed pixel actor",
   "type": "module",
   "main": "./lib/index.js",

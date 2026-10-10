@@ -4,7 +4,7 @@
 
 你在左边照常聊天；右边的舞台上，一条像素小鲸鱼会读懂你的话：你让它游泳，它就在水里游起来；你让它变成恐龙，它就请模型现画一只恐龙，再一格一格把自己拼成恐龙。模型思考时，舞台会把思路画成图；回答写完，它再演一场秀给你看。
 
-**当前版本 v0.14.2** · [下载安装包](https://github.com/Funkierry/dsh-thought-window/releases/latest) · [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) · [技术说明](docs/technical-notes.md)
+**当前版本 v0.14.3** · [下载安装包](https://github.com/Funkierry/dsh-thought-window/releases/latest) · [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) · [技术说明](docs/technical-notes.md)
 
 ![左边是 DSH 聊天，右边是水下舞台：DeepSeek 鲸鱼在水草和气泡间演出，上方是 me.action 等状态，下方是本轮事件日志](docs/images/hero-v0.14.png)
 
@@ -62,7 +62,9 @@ me.scene  = water
 
 ### 🧠 想法被画成图
 
-模型的公开思考会被切成可以慢慢读的片段，每一段配一张画。一共 **29 种画面**，包括 Agent 循环、规划格、比较塔、检查日志、代码、公式，以及关键词雷达、词 × 步骤热力图、词星图。像素从底部生长出来，上一张图会变形成下一张，不是翻页式地换模板。
+右侧现在默认开启**多界面轮播，每 3 秒换一页**：文本拆解、字数节奏、关键词雷达、步骤方格、片段关系等界面依次出现；有工具、文件或运行记录时，再加入对应页面。同一段内容可以从不同角度看，不用等到读下一段才换画面。
+
+模型的公开思考仍按较长的片段慢慢阅读，阅读速度和界面轮播互不影响。一共 **29 种画面**，包括 Agent 循环、规划格、比较塔、检查日志、代码、公式，以及关键词雷达、词 × 步骤热力图、词星图。像素从底部生长出来，上一张图会变形成下一张，不是翻页式地换模板。
 
 模型回得再快也不用急：可以暂停、逐条看，或者直接跳到最新。
 
@@ -96,11 +98,11 @@ me.scene  = water
 
 需要先装好并运行过 **DeepSeek Harness Web**（按 DSH Web 0.1.5-rc.2 开发和验证）。
 
-1. 从[发布页](https://github.com/Funkierry/dsh-thought-window/releases/latest)下载 `dsh-thought-window-0.14.2.tgz`。
+1. 从[发布页](https://github.com/Funkierry/dsh-thought-window/releases/latest)下载 `dsh-thought-window-0.14.3.tgz`。
 2. 在 PowerShell 里执行（把路径换成你的下载位置）：
 
    ```powershell
-   dsh plugin --profile web add 'C:\你的下载目录\dsh-thought-window-0.14.2.tgz'
+   dsh plugin --profile web add 'C:\你的下载目录\dsh-thought-window-0.14.3.tgz'
    ```
 
 3. **重启 DSH Web**，刷新浏览器，点输入框旁的 **「▦ 思路视窗」**。舞台开张。
@@ -132,6 +134,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
 
 | 想要 | 怎么做 |
 | --- | --- |
+| 暂停或手动换画面 | 右侧画布上方点「暂停」、‹ / ›，或从下拉框选一页 |
+| 调整轮播速度 | 菜单「轮播 → 每页」选 3 / 5 / 8 秒；取消「多界面依次切换」可恢复按内容换画面 |
 | 看慢一点 | 「阅读 → 停留」选 12 秒；或者按空格暂停，用 ← / → 逐条看 |
 | 动效温和些 | 「外观 → 动效」选「轻柔」，或关掉「动效」 |
 | 回答写完后不收起 | 取消「舞台 → 回答完成后收起回答窗口」 |
@@ -204,7 +208,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1 -Uninstall
 
 ```sh
 npm run build   # 打包 lib/client.js 与 lib/index.js
-npm test        # 71 项单元测试
+npm test        # 74 项单元测试
 npm pack        # 生成安装包
 ```
 
@@ -214,6 +218,10 @@ npm pack        # 生成安装包
 
 ## 🙏 致谢
 
-视觉风格参考 [MisakaZentai/world-execute-me-dsh-pv](https://github.com/MisakaZentai/world-execute-me-dsh-pv)：终端构图、深海配色和连续动效的思路，在这里改写成了跟着实时对话演出的舞台。详细署名见 [NOTICE.md](NOTICE.md)。
+特别感谢 [MisakaZentai](https://github.com/MisakaZentai) 开源 [world-execute-me-dsh-pv](https://github.com/MisakaZentai/world-execute-me-dsh-pv)。Thought Window 最初受到这支 PV 的启发，重点学习了它的终端构图、深海配色、用代码生成可视化画面，以及让元素在不同场景间连续变化的转场思路。感谢作者公开作品背后的实现，让我们能够学习如何把文字与程序过程组织成有节奏的视觉表达。
+
+同时感谢作者发布的 [B 站原作视频（BV1xCai6aE9g）](https://www.bilibili.com/video/BV1xCai6aE9g/)，它是本插件最初的视觉参考。欢迎观看原作、阅读源码，并支持原作者。
+
+在这些参考的基础上，Thought Window 将画面与转场适配到 DSH 的实时对话、公开推理、工具调用和文件成果中。具体参考内容与署名保留在 [NOTICE.md](NOTICE.md) 中。
 
 代码使用 [MIT 许可证](LICENSE)。

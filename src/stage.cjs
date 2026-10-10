@@ -11,13 +11,14 @@ const {turnNodes}=require('./scenes.cjs');
 const {createEngine}=require('./stage-engine.cjs');
 const {buildFigure,TITLES,CAPTIONS}=require('./stage-figures.cjs');
 const D=require('./stage-data.cjs');
+const {PAGE_SECONDS,PAGE_NAMES,stagePages,nextPage,pacePage}=require('./stage-pages.cjs');
 const {useStageDirector,useThoughtOutline,ROUTE}=require('./director.cjs');
 const {Intro,claimIntro}=require('./stage-intro.cjs');
 const {ACTIONS}=require('./director-script.cjs');
 const {FIGURES}=require('./stage-figures.cjs');
 const {runMetrics,fmtMs,fmtTok}=require('./run-metrics.cjs');
-const VERSION='0.14.2';
-// Pacing: scenes hold 5 s, each action plays 6 s, pose frames run 1.5x slower than the base tempo.
+const VERSION='0.14.3';
+// Legacy content-following scenes hold 5 s; actor actions retain their 4 s tempo.
 const SCENE_HOLD=5000,ACTION_STEP=4000,POSE_SLOW=1.5;
 // Once the reply is complete it stays readable this long, then folds away so
 // the actor has the whole stage (the reply is also in the chat on the left).
@@ -142,7 +143,7 @@ function Stage({graph,metricsSource=null,sessionId='session',onSelect,animate,mo
  const metrics=metricsSource?runMetrics(metricsSource.legacy,metricsSource.running,metricsSource.projections,Date.now()):null;
  const avail={timeline:(metrics?.spans.length||0)>=2,tokens:!!(metrics?.usage||metrics?.context),todos:!!metrics?.todos.length,files:!!graph.work?.files?.length};
  const availKey=Object.keys(avail).filter(k=>avail[k]).join();
- const figure=useMemo(()=>D.chooseFigure(entries,index,avail),[entries,index,availKey]);
+ const baseFigure=useMemo(()=>D.chooseFigure(entries,index,avail),[entries,index,availKey]);
  // Actor mode: the director's character on stage; measurement figures only in metrics mode.
  const [mode,setMode]=useState(()=>readPref('stage-mode','actor')==='metrics'?'metrics':'actor');
  const [directing,setDirecting]=useState(()=>readPref('director',true)!==false);
@@ -181,18 +182,44 @@ function Stage({graph,metricsSource=null,sessionId='session',onSelect,animate,mo
  // visualization for the step being read; the actor returns to answer, with the
  // answer typed on the canvas. A step picked by hand shows its own scene.
  const manual=!playing&&!replaying&&!!focus;
- const showOutline=!!outlinePin&&!!thought.outline&&!manual;
- const wantScene=showOutline?'outline':mode!=='actor'?'metrics':(manual?focus.kind!=='answer'&&!(terminal&&['code','request','result'].includes(focus.kind)):livePhase==='think'||livePhase==='tool'&&!terminal)?'thought':'actor';
+ // Page playback is separate from reading: the same paragraph is presented
+ // by several complete layouts, without splitting or advancing its text.
+ const [carouselOn,setCarouselOn]=useState(()=>readPref('stage-carousel',true)!==false);
+ const [pageSeconds,setPageSeconds]=useState(()=>{const n=readPref('stage-page-seconds',PAGE_SECONDS);return [3,5,8].includes(n)?n:PAGE_SECONDS;});
+ const [pagePaused,setPagePaused]=useState(false),[pageChoice,setPageChoice]=useState(null);
+ const [visible,setVisible]=useState(()=>!document.hidden);
+ useEffect(()=>{const update=()=>setVisible(!document.hidden);document.addEventListener('visibilitychange',update);return()=>document.removeEventListener('visibilitychange',update);},[]);
+ useEffect(()=>{writePref('stage-carousel',carouselOn);},[carouselOn]);
+ useEffect(()=>{writePref('stage-page-seconds',pageSeconds);},[pageSeconds]);
+ const pages=useMemo(()=>stagePages(entries,index,{avail,actor:mode==='actor',outline:!!thought.outline}),[entries,index,availKey,mode,!!thought.outline]);
+ const pageKey=String(queue.turn)+':'+mode;
+ const page=pageChoice?.key===pageKey&&pages.includes(pageChoice.id)?pageChoice.id:pages[0];
+ const carousel=carouselOn&&!!focus;
+ const showOutline=!!thought.outline&&(outlinePin==='pin'||outlinePin==='auto'&&!carousel&&!manual);
+ const rotating=carousel&&pages.length>1&&!pagePaused&&playing&&!replaying&&!suspended&&!intro&&!menuOpen&&!showOutline&&motionAllowed&&visible;
+ const pageRef=useRef(null);pageRef.current={pages,page,key:pageKey};
+ useEffect(()=>{
+  if(!rotating)return;
+  const t=setInterval(()=>{const current=pageRef.current;setPageChoice({key:current.key,id:nextPage(current.pages,current.page)});},pageSeconds*1000);
+  return()=>clearInterval(t);
+ },[rotating,pageSeconds,pageKey]);
+ const pickPage=id=>{setPageChoice({key:pageKey,id});setPagePaused(true);setOutlinePin(null);};
+ const togglePages=()=>{setPagePaused(rotating);setOutlinePin(null);if(!playing&&!replaying){started.current=Date.now();setPlaying(true);}};
+ const figure=carousel&&page!=='actor'&&page!=='outline'?page:baseFigure;
+ const contentScene=mode!=='actor'?'metrics':(manual?focus.kind!=='answer'&&!(terminal&&['code','request','result'].includes(focus.kind)):livePhase==='think'||livePhase==='tool'&&!terminal)?'thought':'actor';
+ const wantScene=showOutline?'outline':carousel?(page==='actor'?'actor':page==='outline'?'outline':mode==='metrics'?'metrics':'thought'):contentScene;
  // A scene holds for at least SCENE_HOLD ms, so think / tool / think flips do
  // not flash the stage; a hand-picked step or the metrics view switches at once.
- const [scene,setScene]=useState(wantScene),sceneSince=useRef(Date.now());
+ const [heldScene,setScene]=useState(wantScene),sceneSince=useRef(Date.now());
+ const scene=carousel||showOutline?wantScene:heldScene;
  useEffect(()=>{
+  if(carousel){sceneSince.current=Date.now();setScene(wantScene);return;}
   if(wantScene===scene)return;
   const wait=manual||[wantScene,scene].some(x=>x==='metrics'||x==='outline')?0:Math.max(0,SCENE_HOLD-(Date.now()-sceneSince.current));
   const t=setTimeout(()=>{sceneSince.current=Date.now();setScene(wantScene);},wait);
   return()=>clearTimeout(t);
- },[wantScene,scene,manual]);
- const answer=scene==='actor'&&!terminal&&(livePhase==='answer'||livePhase==='done'||manual)?answerOf(graph):null;
+ },[wantScene,scene,manual,carousel]);
+ const answer=!terminal&&(livePhase==='answer'||livePhase==='done'||manual)?answerOf(graph):null;
  const [foldOn,setFoldOn]=useState(()=>readPref('fold-answer',true)!==false);
  useEffect(()=>{writePref('fold-answer',foldOn);},[foldOn]);
  const [folded,setFolded]=useState(false),foldedTurn=useRef(null);
@@ -252,10 +279,12 @@ function Stage({graph,metricsSource=null,sessionId='session',onSelect,animate,mo
  useEffect(()=>{
   // Behind the actor the measurements keep moving, but without their text.
   // Re-keyed when the scene comes into view, so the figure builds up again.
-  const spec=engine.current?.show(drawn+':'+queue.turn+':'+scene,box=>buildFigure(drawn,{entries,index,focus,samples:arrival.list.slice(),box,running:graph.running,metrics,work:graph.work,now:Date.now(),
-   outline:thought.outline,outlineModel:thought.model?.model,outlineTokens}));
+  const spec=engine.current?.show(drawn+':'+queue.turn+':'+scene,box=>{
+   const result=buildFigure(drawn,{entries,index,focus,samples:arrival.list.slice(),box,running:graph.running,metrics,work:graph.work,now:Date.now(),outline:thought.outline,outlineModel:thought.model?.model,outlineTokens});
+   return carousel?pacePage(result):result;
+  });
   setCaption(spec?.caption||CAPTIONS[drawn]||'');
- },[figure,queue.turn,focus?.id,focus?.text,focus?.status,entries.length,index,graph.running,samples,scene,DATA_FIGURES.includes(figure)?dataKey(figure,metrics,graph.work):'',thought.outline]);
+ },[figure,queue.turn,focus?.id,focus?.text,focus?.status,entries.length,index,graph.running,samples,scene,DATA_FIGURES.includes(figure)?dataKey(figure,metrics,graph.work):'',thought.outline,carousel]);
  useEffect(()=>{if(!graph.running)return;const timer=setInterval(()=>setClock(n=>n+1),1000);return()=>clearInterval(timer);},[graph.running]);
  useEffect(()=>{
   const box=ops.current,row=box?.querySelector('[aria-current=step]');
@@ -288,7 +317,7 @@ function Stage({graph,metricsSource=null,sessionId='session',onSelect,animate,mo
  const outlineNote={off:'思路提纲已关闭',idle:'本轮没有提纲（公开推理太短，或不是实时回合）· 菜单里可以「生成本轮提纲」',waiting:'推理结束后归纳思路提纲 · 额外调用 1 次模型',pending:'正在归纳思路提纲 · 额外调用 1 次模型',error:'提纲调用失败：'+thought.error,ready:CAPTIONS.outline+(thought.model?' · '+thought.model.model:'')+(outlineTokens?' · '+outlineTokens+' tokens':'')+(thought.ms?' · '+(thought.ms/1000).toFixed(1)+'s':'')}[thought.status];
  const last=arrival.list.at(-1)?.t||arrival.start,elapsed=(graph.running?Date.now():last)-arrival.start;
  const status=source!=='LIVE'&&source!=='IDLE'?source:graph.running?'RUNNING':source==='IDLE'&&!focus?'IDLE':playing?pending?'READING':'CAUGHT UP':'PAUSED';
- return h('section',{className:'tw-stage','data-mode':mode,'data-scene':scene,'data-boot':intro?'intro':'ready','data-director':director.status,'data-actor-action':act,'data-actor-style':style,'data-figure':drawn,'data-outline':thought.status,'data-phase':phase[1].toLowerCase(),'data-reading':playing?'playing':'paused','data-active-entry':focus?.id||'','aria-label':'思路舞台'},
+ return h('section',{className:'tw-stage','data-mode':mode,'data-scene':scene,'data-page':showOutline?'outline':carousel?page:scene==='actor'?'actor':drawn,'data-carousel':rotating?'playing':carouselOn?'paused':'off','data-boot':intro?'intro':'ready','data-director':director.status,'data-actor-action':act,'data-actor-style':style,'data-figure':drawn,'data-outline':thought.status,'data-phase':phase[1].toLowerCase(),'data-reading':playing?'playing':'paused','data-active-entry':focus?.id||'','aria-label':'思路舞台'},
   h('header',{className:'tw-stage-top'},
    h('b',null,'THOUGHT.TRACE(ME);'),
    h('span',{className:'tw-stage-prompt'},'deepseek@dsh:~$'),
@@ -303,9 +332,15 @@ function Stage({graph,metricsSource=null,sessionId='session',onSelect,animate,mo
   h('section',{className:'tw-stage-main'},
    h('div',{className:'tw-stage-cap'},h('span',null,'| '+(scene==='actor'?'stage / '+(actor.name||'actor')+(output?' · stdout':''):TITLES[drawn]||drawn)),h('small',null,focus?'#'+pad2(index+1)+' '+focus.op+' · '+focus.label:'standby')),
    h(Hud,{metrics}),
+   carousel?h('nav',{className:'tw-stage-pages','aria-label':'可视化界面轮播'},
+    h('button',{type:'button','aria-label':'上一个可视化界面',disabled:pages.length<2,onClick:()=>pickPage(nextPage(pages,page,-1))},'‹'),
+    h('select',{'aria-label':'当前可视化界面',value:showOutline?'outline':page,onChange:e=>pickPage(e.target.value)},pages.map((id,i)=>h('option',{key:id,value:id},pad2(i+1)+' / '+pad2(pages.length)+' · '+(PAGE_NAMES[id]||id)))),
+    h('button',{type:'button','aria-label':'下一个可视化界面',disabled:pages.length<2,onClick:()=>pickPage(nextPage(pages,page))},'›'),
+    h('button',{type:'button','aria-label':rotating?'暂停界面轮播':'继续界面轮播',disabled:pages.length<2||!motionAllowed||replaying||suspended||intro,onClick:togglePages},rotating?'Ⅱ 暂停':'▷ 轮播'),
+    h('small',null,rotating?pageSeconds+' 秒 / 页':'已停留')):null,
    h('div',{className:'tw-stage-plot',onClick:click},
-    h('canvas',{ref:canvas,className:'tw-stage-canvas tw-stage-back',role:'img','aria-label':(TITLES[figure]||figure)+'：'+D.short(focus?.text||'等待公开内容',80)}),
-    h('canvas',{ref:front,className:'tw-stage-canvas tw-stage-front','aria-hidden':mode!=='actor',role:'img','aria-label':(actor.name||'角色')+' · '+beat.action+(beat.say?'：'+beat.say:'')}),
+    h('canvas',{ref:canvas,className:'tw-stage-canvas tw-stage-back',role:'img','aria-hidden':scene==='actor','aria-label':(TITLES[drawn]||drawn)+'：'+D.short(focus?.text||'等待公开内容',80)}),
+    h('canvas',{ref:front,className:'tw-stage-canvas tw-stage-front','aria-hidden':scene!=='actor',role:'img','aria-label':(actor.name||'角色')+' · '+beat.action+(beat.say?'：'+beat.say:'')}),
     scene==='actor'&&answer?h('button',{type:'button',className:'tw-stage-answer-btn','aria-pressed':!!output,title:output?'收起回答窗口，让角色用整个舞台':'展开本轮回答',
      onClick:e=>{e.stopPropagation();foldedTurn.current=queue.turn;setFolded(!!output);}},output?'▤ 收起回答':'▤ 展开回答'):null,
     thought.outline||thought.status==='pending'?h('button',{type:'button',className:'tw-stage-outline-btn','aria-pressed':scene==='outline',disabled:!thought.outline,title:thought.outline?'显示 / 收起本轮思路提纲':'正在归纳思路提纲',
@@ -337,6 +372,10 @@ function Stage({graph,metricsSource=null,sessionId='session',onSelect,animate,mo
     h('label',null,h('input',{type:'checkbox',checked:foldOn,onChange:e=>setFoldOn(e.target.checked)}),' 回答完成后收起回答窗口'),
     h('button',{type:'button',onClick:()=>{onMenu?.(false);setIntro(true);}},'重播开屏'),
     h('small',null,directorNote)),
+   h('div',{className:'tw-stage-menu-row'},h('span',null,'轮播'),
+    h('label',null,h('input',{type:'checkbox',checked:carouselOn,onChange:e=>{setCarouselOn(e.target.checked);setPagePaused(false);}}),' 多界面依次切换'),
+    h('label',null,'每页 ',h('select',{'aria-label':'可视化界面切换间隔',value:pageSeconds,onChange:e=>setPageSeconds(Number(e.target.value))},[3,5,8].map(v=>h('option',{key:v,value:v},v+' 秒')))),
+    h('small',null,'轮换整个右侧画面；阅读停留时间不变')),
    h('div',{className:'tw-stage-menu-row'},h('span',null,'提纲'),
     h('label',null,h('input',{type:'checkbox',checked:outlineOn,disabled:replaying,onChange:e=>setOutlineOn(e.target.checked)}),' 思路提纲（推理结束后额外调用 1 次模型）'),
     h('button',{type:'button',disabled:!outlineOn||replaying||!thought.canRequest||thought.status==='pending',onClick:()=>{thought.request();}},thought.outline?'重新归纳本轮':'生成本轮提纲'),

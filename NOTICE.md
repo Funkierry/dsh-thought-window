@@ -6,6 +6,12 @@ Thought Window's terminal panel treatment, deep-sea palette and animation vocabu
 
 https://github.com/MisakaZentai/world-execute-me-dsh-pv
 
+Original Bilibili PV by MisakaZentai, also credited as the initial visual inspiration for this plugin:
+
+https://www.bilibili.com/video/BV1xCai6aE9g/
+
+Thank you to the author for sharing both the original video and its implementation.
+
 Reference files: `film/tui_pv_world_execute_20260926/tuikit.py`, especially its `deepsea` palette and terminal `box` drawing primitive; and its TUI event/list presentation. The browser implementation is adapted to React/CSS/SVG and live public DSH conversation events. It does not render the reference project's video timeline.
 
 Version 0.4 also studies `full/transitions.py` (reflow, camera pan/zoom), `continuity_full_v2/cuts.py` and `kit.py` (outgoing/incoming layers, carriers and eased paths), `s_sft.py` (grid/camera continuity), `scenes_eval.py` (a persistent focus cell), and `scenes_exec.py` (glyph banners and process registers). These ideas are reimplemented with bounded SVG diagrams and Web Animations for real-time conversation events. Words come from visible source excerpts; point fields are decorative, not model parameters, token embeddings, attention weights or training telemetry. The new code does not replay the song's storyboard or copy its artwork.
