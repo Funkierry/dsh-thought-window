@@ -2,7 +2,7 @@
 // Measurements for the stage. Every number drawn there comes from this file:
 // lengths, word segments with source offsets, character-bigram overlap, a fixed
 // hash projection and observed arrival samples. None is a model-internal value.
-const STOP=new Set(['我','你','他','她','它','我想','想要','希望','帮我','请','做','让','给','一下','怎么','如何','为什么','的','了','是','在','和','与','或','及','把','被','将','对','从','也','都','就','而','并','但','这','那','这个','那个','一个','一些','我们','你们','他们','需要','可以','然后','如果','因为','所以','进行','当前','使用','通过','以及','没有','已经','还是','这样','这里','什么','怎么','时候','现在','部分','内容','问题','the','and','for','with','that','this','from','into','are','was','were','will','can','not','but','you','your','have','has','its','then','than','when','what','which','there','their','also','just','only','each','more','some']);
+const STOP=new Set(['我','你','他','她','它','我想','想要','接着','应该','关系','希望','帮我','请','做','让','给','一下','怎么','如何','为什么','的','了','是','在','和','与','或','及','把','被','将','对','从','也','都','就','而','并','但','这','那','这个','那个','一个','一些','我们','你们','他们','需要','可以','然后','如果','因为','所以','进行','当前','使用','通过','以及','没有','已经','还是','这样','这里','什么','怎么','时候','现在','部分','内容','问题','the','and','for','with','that','this','from','into','are','was','were','will','can','not','but','you','your','have','has','its','then','than','when','what','which','there','their','also','just','only','each','more','some']);
 const segmenter=typeof Intl!=='undefined'&&Intl.Segmenter?new Intl.Segmenter('zh',{granularity:'word'}):null;
 const chars=text=>Array.from(String(text||''));
 const length=text=>chars(text).length;
@@ -69,31 +69,47 @@ function overlap(texts){
 const PHASES={input:['00','STDIN'],request:['02','TOOL'],result:['02','TOOL'],answer:['03','OUTPUT'],error:['!!','ERROR'],retry:['!!','RETRY']};
 const phaseOf=kind=>PHASES[kind]||['01','THINK'];
 
-// Figure choice is a pure function of the queue position, so a streaming
-// sentence keeps its drawing. Kinds with several drawings alternate along a
-// run of the same kind; plain reasoning rotates through the measurements.
-const BY_KIND={input:['glyph'],plan:['agentloop','grid','bars'],constraint:['agentloop','tokenizer'],compare:['nexttoken','compare','cloud'],search:['cloud','tokenizer','mask'],code:['code'],math:['formula','spiral'],check:['boot','mask','agentloop'],revise:['diff','redline'],error:['errorbig'],retry:['errorbig','diff'],request:['exec','agentloop'],result:['exec','agentloop'],answer:['compose']};
-const ROTATION=['tokenizer','spiral','bars','nexttoken','curve','cloud','mask','grid'];
-const NEEDS={cloud:4,mask:5,curve:2,grid:2,nexttoken:3};
-function baseFigure(entries,index){
+// Figure choice is a pure function of the queue position (and of which run
+// records exist), so a streaming sentence keeps its drawing. Kinds with several
+// drawings alternate along a run of the same kind; plain reasoning rotates
+// through scenes that carry information. Data scenes need their data:
+// avail = {timeline, tokens, todos, files}.
+const BY_KIND={input:['glyph'],plan:['agentloop','todos','heatmap','grid'],constraint:['agentloop','constellation','tokenizer'],compare:['nexttoken','compare','constellation'],search:['radar','tokenizer','nexttoken'],code:['code'],math:['formula','spiral'],check:['todos','boot','radar','agentloop'],revise:['diff','redline'],error:['errorbig','timeline'],retry:['errorbig','diff'],request:['timeline','exec','agentloop'],result:['exec','timeline'],answer:['compose']};
+const ROTATION=['tokenizer','timeline','radar','nexttoken','tokens','heatmap','agentloop','constellation','spiral','grid'];
+const NEEDS={grid:2,nexttoken:3,radar:2,heatmap:3,constellation:3};
+const DATA=['timeline','tokens','todos','files'];
+function baseFigure(entries,index,avail={}){
  const entry=entries[index];
  if(!entry)return 'idle';
  if(entry.kind==='answer'&&/^\s*\|.*\|\s*$/m.test(entry.text))return 'table';
- const fits=id=>index+1>=(NEEDS[id]||0);
+ const fits=id=>index+1>=(NEEDS[id]||0)&&(!DATA.includes(id)||!!avail[id]);
+ // A tool that wrote todos or files shows what it wrote.
+ if(entry.kind==='request'||entry.kind==='result'){
+  if(/todo/i.test(entry.title)&&avail.todos)return 'todos';
+  if(/write|edit|replace|create|patch|present|save/i.test(entry.title)&&avail.files)return 'files';
+ }
  const options=BY_KIND[entry.kind];
  if(options){
   let run=0;for(let i=index-1;i>=0&&entries[i].kind===entry.kind;i--)run++;
   const usable=options.filter(fits);
-  return usable.length?usable[run%usable.length]:options[0]==='grid'?'bars':options[0];
+  return usable.length?usable[run%usable.length]:options.find(id=>!DATA.includes(id))||'tokenizer';
  }
  for(let i=0;i<ROTATION.length;i++){const id=ROTATION[(index+i)%ROTATION.length];if(fits(id))return id;}
- return 'bars';
+ return 'tokenizer';
 }
-function chooseFigure(entries,index){
- const id=baseFigure(entries,index);
- if(index>0&&!BY_KIND[entries[index]?.kind]&&baseFigure(entries,index-1)===id){
+function chooseFigure(entries,index,avail={}){
+ const id=baseFigure(entries,index,avail),kind=entries[index]?.kind;
+ if(index<1||['request','result','input','answer','code'].includes(kind))return id;
+ const previous=chooseFigure(entries,index-1,avail);
+ if(previous!==id)return id;
+ // Same drawing as the step before: a kind with alternatives takes another one.
+ const fits=f=>index+1>=(NEEDS[f]||0)&&(!DATA.includes(f)||avail[f]);
+ const other=(BY_KIND[kind]||[]).find(f=>f!==id&&fits(f));
+ if(other)return other;
+ if(BY_KIND[kind])return id;
+ {
   const at=ROTATION.indexOf(id);
-  for(let i=1;i<ROTATION.length;i++){const next=ROTATION[(at+i)%ROTATION.length];if(index+1>=(NEEDS[next]||0))return next;}
+  for(let i=1;i<ROTATION.length;i++){const next=ROTATION[(at+i)%ROTATION.length];if(index+1>=(NEEDS[next]||0)&&(!DATA.includes(next)||avail[next]))return next;}
  }
  return id;
 }

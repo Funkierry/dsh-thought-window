@@ -10,6 +10,8 @@ const {createHostBridge}=require('./host-bridge.cjs');
 const css=require('./style.css');
 const {createElement:h,useState,useEffect,useMemo,useRef,useSyncExternalStore}=React;
 const EMPTY_DELIVERY_SOURCE={subscribe:()=>()=>{},getSnapshot:()=>undefined};
+// Session projections DSH serves to session-scoped slots; absent in older hosts.
+const NO_PROJECTION=()=>undefined;
 
 // DSH 0.1.5-rc.2 does not expose an outer split-pane factory. This small DOM
 // adapter owns only its mount/class. Chat data always comes from public hooks.
@@ -19,7 +21,7 @@ function findRoot(anchor){
   return null;
 }
 const stageSplit=value=>Number.isFinite(value)?Math.max(.45,Math.min(.8,value)):.7;
-function Controller({sessionId,useChat,useSession,host}) {
+function Controller({sessionId,useChat,useSession,useProjection=NO_PROJECTION,host}) {
   const anchor=useRef(null);
   const [enabled,setEnabled]=useState(()=>pref('enabled',true));
   const [mount,setMount]=useState(null);
@@ -31,6 +33,8 @@ function Controller({sessionId,useChat,useSession,host}) {
   const deliveryHooks=useMemo(()=>({subscribe:fn=>deliverySource.subscribe(fn),getSnapshot:()=>deliverySource.getSnapshot()}),[deliverySource]);
   const deliverables=useSyncExternalStore(deliveryHooks.subscribe,deliveryHooks.getSnapshot);
   const running=useSession(s=>s.running);
+  const tokenUsage=useProjection('tokenUsage'),contextPressure=useProjection('contextPressure'),todos=useProjection('todos'),sessionStats=useProjection('sessionStats');
+  const metricsSource=useMemo(()=>({legacy,running,projections:{tokenUsage,contextPressure,todos,sessionStats}}),[legacy,running,tokenUsage,contextPressure,todos,sessionStats]);
   const graph=useMemo(()=>({...project(legacy,running),work:projectWork(legacy,running,deliverables,host.cwd(sessionId))}),[legacy,running,deliverables,host,sessionId]);
   const [preview,setPreview]=useState({open:false,path:'',address:''}),[dockExpanded,setDockExpanded]=useState(false);
   const [shell,setShell]=useState({stage:false,sidebar:false});
@@ -81,7 +85,7 @@ function Controller({sessionId,useChat,useSession,host}) {
     refreshLayout.current=resize;resize();const observer=new ResizeObserver(resize);observer.observe(root);setMount(element);
     return()=>{observer.disconnect();refreshLayout.current=null;setMount(null);element.remove();divider.remove();hostTheme.release();root.classList.remove('tw-native-shell','tw-stacked','tw-resizing','tw-preview-open','tw-preview-folded','tw-stage-shell');if(!document.querySelector('.tw-stage-shell'))document.body.classList.remove('tw-stage-host');root.style.removeProperty('--tw-panel-width');themeRoot.current=null;};
   },[enabled,sessionId]);
-  return h(React.Fragment,null,h('button',{ref:anchor,type:'button',className:'tw-launch',title:unsupported?'当前 DSH 布局不兼容，可关闭插件并查看 README':'打开 / 关闭思路视窗','aria-label':'思路视窗','aria-pressed':enabled&&!unsupported,onClick:()=>setEnabled(!enabled)},'▦ ',unsupported?'布局不兼容':'思路视窗'),mount&&enabled?ReactDOM.createPortal(h(ThoughtWindow,{key:sessionId,graph,sessionId,preview,dockExpanded,onExpandDock:()=>setDockExpanded(true),onFoldDock:()=>setDockExpanded(false),onOpenFile:host.canOpen()?path=>host.openFile(sessionId,path):undefined,onClose:()=>setEnabled(false),onTheme:theme=>themeRoot.current?.set(theme),onShell:next=>setShell(old=>old.stage===next.stage&&old.sidebar===next.sidebar?old:next)}),mount):null);
+  return h(React.Fragment,null,h('button',{ref:anchor,type:'button',className:'tw-launch',title:unsupported?'当前 DSH 布局不兼容，可关闭插件并查看 README':'打开 / 关闭思路视窗','aria-label':'思路视窗','aria-pressed':enabled&&!unsupported,onClick:()=>setEnabled(!enabled)},'▦ ',unsupported?'布局不兼容':'思路视窗'),mount&&enabled?ReactDOM.createPortal(h(ThoughtWindow,{key:sessionId,graph,metricsSource,sessionId,preview,dockExpanded,onExpandDock:()=>setDockExpanded(true),onFoldDock:()=>setDockExpanded(false),onOpenFile:host.canOpen()?path=>host.openFile(sessionId,path):undefined,onClose:()=>setEnabled(false),onTheme:theme=>themeRoot.current?.set(theme),onShell:next=>setShell(old=>old.stage===next.stage&&old.sidebar===next.sidebar?old:next)}),mount):null);
 }
 class Boundary extends React.Component {
   constructor(props){super(props);this.state={error:false};}
@@ -91,7 +95,7 @@ class Boundary extends React.Component {
 const inject=['slots'];
 function apply(ctx){
   const host=createHostBridge(ctx);
-  ctx.effect(()=>{const style=document.createElement('style');style.dataset.thoughtWindow='0.10.1';style.textContent=css;document.head.appendChild(style);return()=>style.remove();});
+  ctx.effect(()=>{const style=document.createElement('style');style.dataset.thoughtWindow='0.14.2';style.textContent=css;document.head.appendChild(style);return()=>style.remove();});
   ctx.slots.inject('conversation.input.left',function*(){
     yield ctx.slots.register({name:'conversation.input.left',id:'thought-window',order:90},props=>h(Boundary,null,h(Controller,{...props,host})));
   });

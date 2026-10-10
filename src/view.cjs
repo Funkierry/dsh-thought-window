@@ -50,7 +50,7 @@ function Graph({graph,selected,onSelect,animate,follow}) {
 }
 
 const LAYOUTS=['stage','process','workbench','adaptive','terminal','graph'];
-function ThoughtWindow({graph,sessionId,onClose,onTheme,onShell,mode='live',onOpenFile,preview={open:false},dockExpanded=false,onExpandDock,onFoldDock}) {
+function ThoughtWindow({graph,metricsSource,sessionId,onClose,onTheme,onShell,mode='live',onOpenFile,preview={open:false},dockExpanded=false,onExpandDock,onFoldDock}) {
   const [theme,setTheme]=useState(()=>{const value=pref('theme-v5','obsidian');return value==='auto'||Object.hasOwn(THEMES,value)?value:'obsidian';});
   // 0.7 keeps its own layout preference so the stage opens first after the update.
   const [layout,setLayout]=useState(()=>{const value=pref('layout-v7','stage');return LAYOUTS.includes(value)?value:'stage';});
@@ -166,12 +166,12 @@ function ThoughtWindow({graph,sessionId,onClose,onTheme,onShell,mode='live',onOp
       h('div',{className:'tw-controls'},...controls));
     return h('section',{className:`tw-window tw-theme-${effectiveTheme} tw-layout-stage ${animate?'':'tw-no-motion'}`,'data-motion':motion,'aria-label':'思路视窗'},
       preview.open?h(PreviewDock,{work:graph.work,preview,onExpand:()=>onExpandDock?.(),onWork:()=>{setLayout('workbench');onExpandDock?.();}}):null,
-      h(Stage,{graph:current,sessionId,onSelect:selectSource,animate:animate&&!folded,motion,replaying:!live,suspended:folded,theme:effectiveTheme,menu:menuBody,menuOpen:menu,onMenu:value=>setMenu(old=>typeof value==='boolean'?value:!old),omitted:current.omitted,source:live?(current.running?'LIVE':'IDLE'):imported?'IMPORTED':'REPLAY'}),
+      h(Stage,{graph:current,metricsSource:live?metricsSource:null,sessionId,onSelect:selectSource,animate:animate&&!folded,motion,replaying:!live,suspended:folded,theme:effectiveTheme,menu:menuBody,menuOpen:menu,onMenu:value=>setMenu(old=>typeof value==='boolean'?value:!old),omitted:current.omitted,source:live?(current.running?'LIVE':'IDLE'):imported?'IMPORTED':'REPLAY'}),
       sourcePanel);
   }
   return h('section',{className:`tw-window tw-theme-${effectiveTheme} tw-layout-${layout} ${animate?'':'tw-no-motion'}`,'data-motion':motion,'aria-label':'思路视窗'},
     preview.open?h(PreviewDock,{work:graph.work,preview,onExpand:()=>{setLayout('process');onExpandDock?.();},onWork:()=>{setLayout('workbench');onExpandDock?.();}}):null,
-    h('header',{className:'tw-titlebar'},h('div',null,h('span',{className:'tw-mark'},'▦'),h('strong',null,'THOUGHT WINDOW'),h('small',null,'思路仪表 / 0.10.1')),
+    h('header',{className:'tw-titlebar'},h('div',null,h('span',{className:'tw-mark'},'▦'),h('strong',null,'THOUGHT WINDOW'),h('small',null,'思路仪表 / 0.14.2')),
       h('div',{className:'tw-title-actions'},preview.open?h('button',{type:'button',className:'tw-dock-fold',onClick:onFoldDock},'收起过程'):null,h('button',{type:'button','aria-label':'外观设置','aria-expanded':settings,onClick:()=>setSettings(!settings)},'⚙'),h('button',{type:'button',title:'轮换配色','aria-label':'切换主题',onClick:()=>{const keys=Object.keys(THEMES);setTheme(keys[(keys.indexOf(effectiveTheme)+1)%keys.length]);}},'◐'),h('button',{type:'button','aria-label':'关闭思路视窗',title:'恢复原始聊天布局',onClick:onClose},'×'))),
     appearance,
     h('div',{className:'tw-ribbon'},h('span',{className:current.running&&live?'tw-live tw-pulse':'tw-live'},h('i'),mode==='demo'?'DEMO / 演示数据':imported?'IMPORTED / 导入':live?(current.running?'LIVE / 运行中':'LIVE / 等待输入'):'REPLAY / 回放'),h('span',null,`${current.nodes.length} EVENTS · ${current.nodes.filter(n=>n.kind==='tool').length} TOOLS`)),

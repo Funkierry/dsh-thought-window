@@ -20,7 +20,7 @@ test('scripts are parsed from fenced or chatty replies and every field is bounde
 });
 
 test('unknown actions fall back per phase and text is clipped',()=>{
- const script=normalizeScript({actor:{name:'x'.repeat(80),keep:true},beats:{think:{action:'fly',say:'长'.repeat(90)}}});
+ const script=normalizeScript({actor:{name:'x'.repeat(80),keep:true},beats:{think:{action:'moonwalk',say:'长'.repeat(90)}}});
  assert.equal(script.beats.think.action,'think');
  assert.equal(script.beats.answer.action,'nod');
  assert.equal([...script.beats.think.say].length,40);
@@ -45,7 +45,10 @@ test('the request frames the message as data and the prompt lists every action',
  assert.equal(data.user_message,'你是一个茄子');
  assert.equal(data.previous_actor,'苹果');
  for(const action of ACTIONS)assert.ok(SYSTEM_PROMPT.includes(action));
- assert.ok(parseScript(SYSTEM_PROMPT.slice(SYSTEM_PROMPT.lastIndexOf('{"actor"'))).actor.sprite,'the prompt example itself is valid');
+ const examples=SYSTEM_PROMPT.split('\n').filter(l=>l.startsWith('Example for')).map(l=>parseScript(l.slice(l.indexOf('{'))));
+ assert.equal(examples.length,2,'both prompt examples are valid scripts');
+ assert.equal(examples[0].actor.preset,'fish');assert.equal(examples[0].env,'water');
+ assert.ok(examples[1].moves['翻跟头'],'the custom move survives');assert.deepEqual(examples[1].beats.done.actions,['翻跟头','cheer']);
 });
 
 function graph(nodes,running){return project({nodes,partial:null,runningCalls:[]},running);}
@@ -92,11 +95,11 @@ test('actor scenes stay on the canvas, grow from the floor and carry the action'
 test('scripts v2 carry pose frames, action sequences and props, all aligned and bounded',()=>{
  const base=['..kk..','.kppk.','kppppk','kppppk','.kppk.','..kk..'],up=['k....k','.kppk.','kppppk','kppppk','.kppk.','.k..k.'];
  const script=normalizeScript({actor:{name:'球',sprite:{palette:{k:'#000000',p:'#ff0000'},rows:base},frames:[{rows:up},{rows:['x']},{rows:base}]},
-  beats:{done:{actions:['jump','spin','fly','dance','wave']}},props:[{name:'话筒',place:'left',motion:'bob',sprite:{palette:{m:'#cccccc'},rows:['mm','mm','mm','mm']}},{name:'坏的',sprite:{palette:{},rows:['a']}}]});
+  beats:{done:{actions:['jump','spin','moonwalk','dance','wave']}},props:[{name:'话筒',place:'left',motion:'bob',sprite:{palette:{m:'#cccccc'},rows:['mm','mm','mm','mm']}},{name:'坏的',sprite:{palette:{},rows:['a']}}]});
  const sprite=script.actor.sprite;
  assert.equal(sprite.frames.length,2,'unusable frames dropped, at most two');
  assert.ok(sprite.frames.every(f=>f.length===sprite.h&&f.every(r=>r.length===sprite.w)),'frames share the base size');
- assert.deepEqual(script.beats.done.actions,['jump','spin','dance'],'unknown actions removed, at most three');
+ assert.deepEqual(script.beats.done.actions,['jump','spin','dance','wave'],'unknown actions removed, at most six for the show');
  assert.equal(script.beats.done.action,'jump');
  assert.equal(script.props.length,1);assert.equal(script.props[0].motion,'bob');
 });
