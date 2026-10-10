@@ -17,7 +17,7 @@ const {Intro,claimIntro}=require('./stage-intro.cjs');
 const {ACTIONS}=require('./director-script.cjs');
 const {FIGURES}=require('./stage-figures.cjs');
 const {runMetrics,fmtMs,fmtTok}=require('./run-metrics.cjs');
-const VERSION='0.14.3';
+const VERSION='0.14.4';
 // Legacy content-following scenes hold 5 s; actor actions retain their 4 s tempo.
 const SCENE_HOLD=5000,ACTION_STEP=4000,POSE_SLOW=1.5;
 // Once the reply is complete it stays readable this long, then folds away so

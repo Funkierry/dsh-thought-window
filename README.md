@@ -4,7 +4,7 @@
 
 你在左边照常聊天；右边的舞台上，一条像素小鲸鱼会读懂你的话：你让它游泳，它就在水里游起来；你让它变成恐龙，它就请模型现画一只恐龙，再一格一格把自己拼成恐龙。模型思考时，舞台会把思路画成图；回答写完，它再演一场秀给你看。
 
-**当前版本 v0.14.3** · [下载安装包](https://github.com/Funkierry/dsh-thought-window/releases/latest) · [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) · [技术说明](docs/technical-notes.md)
+**当前版本 v0.14.4** · [下载安装包](https://github.com/Funkierry/dsh-thought-window/releases/latest) · [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) · [技术说明](docs/technical-notes.md)
 
 ![左边是 DSH 聊天，右边是水下舞台：DeepSeek 鲸鱼在水草和气泡间演出，上方是 me.action 等状态，下方是本轮事件日志](docs/images/hero-v0.14.png)
 
@@ -98,11 +98,11 @@ me.scene  = water
 
 需要先装好并运行过 **DeepSeek Harness Web**（按 DSH Web 0.1.5-rc.2 开发和验证）。
 
-1. 从[发布页](https://github.com/Funkierry/dsh-thought-window/releases/latest)下载 `dsh-thought-window-0.14.3.tgz`。
+1. 从[发布页](https://github.com/Funkierry/dsh-thought-window/releases/latest)下载 `dsh-thought-window-0.14.4.tgz`。
 2. 在 PowerShell 里执行（把路径换成你的下载位置）：
 
    ```powershell
-   dsh plugin --profile web add 'C:\你的下载目录\dsh-thought-window-0.14.3.tgz'
+   dsh plugin --profile web add 'C:\你的下载目录\dsh-thought-window-0.14.4.tgz'
    ```
 
 3. **重启 DSH Web**，刷新浏览器，点输入框旁的 **「▦ 思路视窗」**。舞台开张。
@@ -171,7 +171,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
 这是故意的：默认就是 DeepSeek 鲸鱼，只有明确的变身指令（「你是…」「变成…」「扮演…」）才换。「你是谁」「你是不是机器人」这种提问不算。
 
 **开屏动画怎么不播了？**
-同一个标签页只自动播一次，免得刷新时反复打断你。想再看，点菜单里的「重播开屏」。
+开启「开屏动画」后，每次打开或刷新网页都会自动播放一次。切换对话、切换可视化页面和插件热更新不会重复播放。想随时再看，点菜单里的「重播开屏」；播放中可点击或按任意键跳过。系统开启「减少动态效果」时会跳过自动开屏。
 
 **我的对话会被发到别处吗？**
 不会另外发到别的地方。可视化都在浏览器本地完成。角色导演、作画和思路提纲只通过 DSH 自己配置的模型服务发送必要内容：本轮消息、一句角色描述，或公开推理（最多约 9,000 字）。插件没有自己的服务器，也不读你的 API key。回放默认不保存；导出的回放文件会包含对话原文。
@@ -208,7 +208,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1 -Uninstall
 
 ```sh
 npm run build   # 打包 lib/client.js 与 lib/index.js
-npm test        # 74 项单元测试
+npm test        # 76 项单元测试
 npm pack        # 生成安装包
 ```
 

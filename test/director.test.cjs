@@ -174,3 +174,27 @@ test('the opening is claimed once per page, however many stages mount',()=>{
  assert.equal(claimIntro(),false);
  assert.equal(claimIntro(),false);
 });
+
+// Re-evaluate the real module to model a plugin hot update; a new Document
+// models a browser refresh while sessionStorage remains in the same tab.
+function introInPage(document,timeOrigin,sessionStorage){
+ const fs=require('node:fs'),vm=require('node:vm'),{createRequire}=require('node:module');
+ const file=require.resolve('../src/stage-intro.cjs'),module={exports:{}};
+ vm.runInNewContext(fs.readFileSync(file,'utf8'),{module,require:createRequire(file),document,performance:{timeOrigin},sessionStorage,Symbol});
+ return module.exports.claimIntro;
+}
+test('refresh starts a new opening, while hot updates keep the same document claim',()=>{
+ const storage={getItem:()=> '1500'},document={};
+ const first=introInPage(document,2000,storage);
+ assert.equal(first(),true,'old tab-session record does not block a fresh page');
+ assert.equal(first(),false,'conversation remount');
+ assert.equal(introInPage(document,2000,storage)(),false,'module hot reload');
+ assert.equal(introInPage({},3000,storage)(),true,'refresh in the same tab');
+ assert.equal(introInPage({},1000,storage)(),false,'legacy version already played on this navigation');
+});
+test('opening guards still work if browser storage is unavailable',()=>{
+ const storage={getItem(){throw Error('storage denied');}},document={};
+ assert.equal(introInPage(document,1000,storage)(),true);
+ assert.equal(introInPage(document,1000,storage)(),false);
+ assert.equal(introInPage({},2000,storage)(),true);
+});

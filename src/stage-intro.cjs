@@ -74,15 +74,17 @@ function introSteps(info){
  return [[0,'protect',b=>protect(b,info)],[2300,'load',b=>load(b,info)],[4100,'object',b=>object(b,info)],[6100,'neofetch',b=>neofetch(b,info)],
   [7900,'3',b=>digit(b,info,3)],[8500,'2',b=>digit(b,info,2)],[9100,'1',b=>digit(b,info,1)],[9700,'run',b=>run(b,info)],[11000,'end',null]];
 }
-// "Already shown" lives in sessionStorage, claimed the moment a stage decides
-// to play: DSH may re-run the plugin (live patch reload) or rebuild the
-// conversation view, and neither may replay the opening in the same tab.
-const SHOWN='tw:intro-shown';
-let shownThisPage=false;
+// Keep the claim on this Document, so it survives conversation remounts and
+// module hot reloads, but resets when the browser loads a fresh page.
+const SHOWN=Symbol.for('dsh-thought-window.intro-shown');
 function claimIntro(){
- if(shownThisPage)return false;
- try{if(sessionStorage.getItem(SHOWN))return shownThisPage=true,false;sessionStorage.setItem(SHOWN,String(Date.now()));}catch{}
- shownThisPage=true;return true;
+ const page=globalThis.document||globalThis;
+ if(page[SHOWN])return false;
+ page[SHOWN]=true;
+ // When upgrading from <= 0.14.3 without refreshing, honor an opening already
+ // shown during this navigation. A previous page's legacy timestamp is ignored.
+ try{const legacy=Number(sessionStorage.getItem('tw:intro-shown'));if(legacy>0&&Number.isFinite(performance.timeOrigin)&&legacy>=performance.timeOrigin)return false;}catch{}
+ return true;
 }
 function Intro({info,onDone}){
  // React is the host's; required here so the step builders stay testable in Node.
