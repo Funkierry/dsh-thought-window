@@ -6,7 +6,7 @@
 // build. Stable ids let a streaming update move only what changed. Sizes scale
 // with the canvas (A.s) so a drawing fills the frame at any window size.
 const D=require('./stage-data.cjs');
-const TITLES={idle:'boot / standby',glyph:'stdin / query',bars:'think / length',curve:'stream / chars',cloud:'trace / point-set',mask:'trace / overlap',grid:'plan / sequence',compare:'options / compare',boot:'verify.log',exec:'tool.exchange',redline:'revision.log',code:'source.code',formula:'formula.extract',compose:'output / compose',table:'output / table'};
+const TITLES={idle:'boot / standby',glyph:'stdin / query',bars:'think / length',curve:'stream / chars',cloud:'trace / point-set',mask:'trace / overlap',grid:'plan / sequence',compare:'options / compare',boot:'verify.log',exec:'tool.exchange',redline:'revision.log',code:'source.code',formula:'formula.extract',compose:'output / compose',table:'output / table',tokenizer:'tokenizer',agentloop:'agent / loop',diff:'revision.diff',spiral:'sampling / spiral',nexttoken:'next_token',errorbig:'stderr'};
 const CAPTIONS={
  idle:'等待公开推理、工具事件或回答',
  glyph:'大字 = 输入中的关键词 · 下方为本轮高频词与出现次数',
@@ -287,9 +287,117 @@ function idle(c){
   live:[{type:'cursor',x:A.x+span(lines[2])*size*.6+4,y:A.bottom-size*4+size*3-size*.85,w:size*.55,h:size}]};
 }
 
-const BUILDERS={idle,glyph,bars,curve,cloud,mask,grid,compare,boot,exec,redline,code,formula,compose,table};
+
+// --- 0.10: scenes after the reference video, each driven by the reasoning text.
+
+function tokenizer(c){
+ // The current sentence cut into word chips, each with its source offset.
+ const A=area(c.box),text=c.focus?.text||'',list=D.words(text).slice(0,80),size=px(A,17),small=Math.max(9,px(A,9)),rowH=Math.round(size*2.7),pad=Math.round(size*.45);
+ const marks=[],texts=[];let x=A.x,y=A.y+8,row=0;
+ const longest=list.reduce((m,w)=>D.length(w.text)>D.length(m?.text||'')?w:m,null);
+ for(const [i,w] of list.entries()){
+  const wpx=span(w.text)*size*.6+pad*2;
+  if(x+wpx>A.right){row++;x=A.x;y+=rowH;}
+  if(y+rowH>A.bottom)break;
+  const hot=w===longest;
+  marks.push({id:'k'+w.index,x,y,w:wpx-4,h:size*1.55,color:hot?'accent':'ink',level:hot?.32:.1,delay:i*45,from:{x,y:A.bottom}});
+  marks.push({id:'u'+w.index,x,y:y+size*1.55,w:wpx-4,h:2,color:hot?'accent':'muted',level:.8,delay:i*45+60,from:{x,y:A.bottom}});
+  texts.push({key:'t'+w.index,text:w.text,x:x+pad,y:y+size*1.12,size,color:hot?'accent':'ink',delay:i*45+80},{key:'o'+w.index,text:String((c.focus?.spans?.[0]?.start||0)+w.index),x:x+pad,y:y+size*1.55+small*1.3,size:small,color:'muted',delay:i*45+100});
+  x+=wpx+6;
+ }
+ return {marks,baseline:A.bottom,caption:'词块 = 当前片段的分词 · 下方数字为原文字符偏移',texts:[...head(c,'tokenizer',null,`${list.length} words · ${D.length(text)} chars`),...texts]};
+}
+
+function agentloop(c){
+ // THINK -> PLAN -> ACT -> OBSERVE, lit by what the turn has actually done.
+ const A=area(c.box),upto=c.entries.slice(0,c.index+1),k=c.focus?.kind;
+ const stage=k==='request'?2:k==='result'?3:['plan','constraint'].includes(k)?1:0;
+ const last=kinds=>[...upto].reverse().find(e=>kinds.includes(e.kind));
+ const boxes=[['THINK','reason()',last(['analysis','check','compare','search','math','code','revise'])],['PLAN','decompose()',last(['plan','constraint'])],['ACT','execute()',last(['request'])],['OBSERVE','observe()',last(['result'])]];
+ const gap=px(A,26),bw=Math.floor((A.w-gap*3)/4),bh=px(A,74),y=A.y+6,marks=[],texts=[],size=px(A,14),small=px(A,10);
+ boxes.forEach(([name,fn,entry],i)=>{
+  const x=A.x+i*(bw+gap),on=i===stage,done=!!entry;
+  marks.push({id:'box'+i,shape:'frame',x,y,w:bw,h:bh,color:on?'accent':done?'ink':'muted',level:on?1:done?.7:.35,delay:i*120,from:{x,y:y+bh}});
+  if(on)marks.push({id:'fill'+i,x:x+2,y:y+2,w:bw-4,h:bh-4,color:'accent',level:.16,delay:i*120+80,blink:false,from:{x,y:y+bh}});
+  texts.push({key:'n'+i,text:name,x:x+10,y:y+size*1.4,size,color:on?'accent':'ink',weight:700,delay:i*120+120},{key:'f'+i,text:fn,x:x+10,y:y+size*1.4+small*1.8,size:small,color:'muted',delay:i*120+160},
+   {key:'e'+i,text:fit(entry?.text||'—',small,bw-20),x:x+10,y:y+bh-small*.9,size:small,color:'ink',level:.75,delay:i*120+220});
+  if(i<3)for(let d=0;d<4;d++)marks.push({id:'ar'+i+'_'+d,x:x+bw+gap*(d+1)/5-2,y:y+bh/2-2,w:4,h:4,color:i<stage?'accent':'muted',level:.9,delay:i*120+200+d*40,from:{x:x+bw,y:y+bh/2}});
+ });
+ // The plan so far, as a tool-call style block.
+ const plans=upto.filter(e=>['plan','constraint'].includes(e.kind)).slice(-7),tools=upto.filter(e=>e.kind==='request').slice(-2),top=y+bh+px(A,30),lh=Math.round(size*1.65);
+ const lines=[['<steps>','muted'],...plans.map((e,i)=>[`  ${String(i+1).padStart(2,'0')}. ${D.short(e.text,80)}`,e===c.focus?'accent':'ink']),...tools.map(e=>[`  call ${e.title} ${D.short(e.text,50)}`,e===c.focus?'accent':'good']),['</steps>','muted']];
+ const shown=lines.slice(0,Math.max(2,Math.min(lines.length,Math.floor((A.h*.5-bh)/lh))));
+ shown.forEach(([text,color],i)=>texts.push({key:'l'+i+text.length,text:fit(text,size,A.w),x:A.x,y:top+i*lh,size,color,delay:500+i*110}));
+ // Swimlanes: every segment so far, placed in its lane, filled up to the focus.
+ const laneOf=e=>e.kind==='request'?2:e.kind==='result'?3:['plan','constraint'].includes(e.kind)?1:0;
+ const all=c.entries.filter(e=>!['input','answer'].includes(e.kind)).slice(-48),lt=top+shown.length*lh+px(A,18),lane=Math.max(10,Math.min(px(A,22),Math.floor((A.bottom-lt)/4)-4)),label=px(A,62),cw=Math.max(6,Math.min(px(A,26),Math.floor((A.w-label)/Math.max(8,all.length))));
+ ['THINK','PLAN','ACT','OBSERVE'].forEach((name,r)=>texts.push({key:'lane'+r,text:name,x:A.x,y:lt+r*(lane+4)+lane*.75,size:px(A,10),color:r===stage?'accent':'muted',delay:700}));
+ all.forEach((e,i)=>{const r=laneOf(e),x=A.x+label+i*cw,yy=lt+r*(lane+4),past=c.entries.indexOf(e)<=c.index;
+  marks.push({id:'sw'+e.id,x,y:yy,w:cw-2,h:lane,color:e===c.focus?'accent':r===2||r===3?'good':'ink',level:e===c.focus?1:past?.55:.12,delay:700+i*18,from:{x,y:A.bottom},ref:e.id});});
+ return {marks,baseline:A.bottom,caption:'高亮 = 当前片段所处的环节 · 下方为本轮已出现的计划与工具调用',texts:[...head(c,'dsh · agent loop',null,['reasoning','planning','acting','observing'][stage]),...texts]};
+}
+
+function diff(c){
+ // The previous line struck out, the revised one added, as a unified diff.
+ const A=area(c.box),err=['error','retry'].includes(c.focus?.kind),before=err?c.focus:c.entries[c.index-1],after=err?null:c.focus;
+ const size=px(A,15),lh=Math.round(size*1.7),cols=Math.max(12,Math.floor((A.w-size*3)/(size*.6))),gut=px(A,6);
+ const old=wrap(before?.text,cols,5),fresh=after?wrap(after.text,cols,6):['↶ retry'],marks=[],texts=[];
+ texts.push({key:'h1',text:'diff --git a/thought b/thought',x:A.x,y:A.y+size,size,color:'muted'},{key:'h2',text:`@@ -${c.index},${old.length} +${c.index+1},${fresh.length} @@`,x:A.x,y:A.y+size+lh,size,color:'accent',delay:150});
+ [...old.map(t=>['-',t]),...fresh.map(t=>['+',t])].forEach(([sign,text],i)=>{
+  const y=A.y+size+lh*(i+2),color=sign==='-'?'danger':'good';
+  marks.push({id:'g'+i,x:A.x,y:y-size*.95,w:gut,h:lh-3,color,level:.85,delay:300+i*110,from:{x:A.x,y:A.bottom}});
+  marks.push({id:'r'+i,x:A.x+gut+2,y:y-size*.95,w:A.w-gut-2,h:lh-3,color,level:.08,delay:300+i*110,from:{x:A.x,y:A.bottom}});
+  texts.push({key:'d'+i+sign,text:sign+' '+text,x:A.x+gut+8,y,size,color,delay:360+i*110});
+ });
+ return {marks,baseline:A.bottom,caption:'红 = 被改写的上一段 · 绿 = 改写后的这一段 · 不判定对错',texts:[...head(c,err?'stderr · retry':'revision.diff',null,`${old.length} − / ${fresh.length} +`),...texts]};
+}
+
+function spiral(c){
+ // The sentence's characters sampled onto a slowly turning spiral.
+ // The current segment winds out from the centre (accent), earlier reasoning continues the arm.
+ const A=area(c.box),own=D.chars((c.focus?.text||'').replace(/\s+/g,'')),before=D.chars(c.entries.slice(Math.max(0,c.index-8),c.index).map(e=>e.text).join('').replace(/\s+/g,'')).slice(-(200-Math.min(own.length,200)));
+ const chars=[...own.slice(0,200),...before.reverse()].slice(0,200),cx=A.x+A.w*.55,cy=A.y+A.h*.48,rmax=Math.min(A.w*.42,A.h*.5),size=px(A,13),marks=[];
+ chars.forEach((ch,i)=>{const u=i/Math.max(1,chars.length-1),a=u*Math.PI*11,r=rmax*(.06+.94*Math.sqrt(u)),x=cx+Math.cos(a)*r-size/2,y=cy+Math.sin(a)*r-size/2,mine=i<own.length;
+  marks.push({id:'s'+i,shape:'glyph',ch,group:'spiral',x,y,w:size,h:size,color:mine?'accent':'ink',level:mine?.95:.25+.5*(1-u),delay:i*9,from:{x,y:A.bottom}});});
+ const count=new Map();for(const ch of chars)count.set(ch,(count.get(ch)||0)+1);
+ const topList=[...count].sort((a,b)=>b[1]-a[1]).slice(0,14),peak=Math.max(1,...topList.map(x=>x[1])),bw=px(A,9),bx=A.x,by=A.bottom-px(A,6);
+ topList.forEach(([ch,n],i)=>{const h=Math.max(3,Math.round(n/peak*A.h*.22));marks.push({id:'h'+i,x:bx+i*(bw+3),y:by-h,w:bw,h,color:'accent',level:.7,delay:400+i*30,from:{x:bx+i*(bw+3),y:by}});});
+ const share=chars.length?(topList[0]?.[1]||0)/chars.length:0;
+ return {marks,baseline:A.bottom,motions:[{group:'spiral',type:'turn',cx:cx,cy:cy,size:rmax}],caption:'螺旋 = 当前片段（高亮）接着之前的推理文字 · 左下柱 = 字频',
+  texts:[...head(c,'sampling · spiral',null,`${chars.length} chars · top "${topList[0]?.[0]||''}"`),{key:'pt',text:'p(top) = {n}',count:{to:share,kind:'fixed2'},x:A.x+topList.length*(bw+3)+12,y:by-4,size:px(A,12),color:'ink',delay:600}]};
+}
+
+function nexttoken(c){
+ // Keyword shares so far (occurrence counts, not model probabilities).
+ const A=area(c.box),texts=[],marks=[],upto=c.entries.slice(0,c.index+1),list=D.keywords(upto.map(e=>e.text),7),sum=Math.max(1,list.reduce((s,k)=>s+k.count,0));
+ const size=px(A,15),lh=Math.round(size*2.3),labelW=size*7,barW=A.w*.42-labelW,focusText=(c.focus?.text||'').toLowerCase();
+ list.forEach((k,i)=>{
+  const y=A.y+size+i*lh,share=k.count/sum,n=Math.max(1,Math.round(k.count/list[0].count*barW/8)),hot=focusText.includes(k.word);
+  texts.push({key:'w'+k.word,text:k.word,x:A.x,y,size,color:hot?'accent':'ink',delay:i*90},{key:'v'+k.word,text:'{n}',count:{to:share,kind:'fixed2'},x:A.x+labelW+n*8+8,y,size:size-2,color:'muted',delay:i*90+200});
+  for(let j=0;j<n;j++)marks.push({id:'b'+k.word+j,x:A.x+labelW+j*8,y:y-size*.8,w:6,h:size*.9,color:hot?'accent':'ink',level:.75,delay:i*90+j*10,from:{x:A.x+labelW,y:y-size*.8}});
+ });
+ // The output column: the current sentence, word by word, the top word marked.
+ const ox=A.x+A.w*.5,ow=A.right-ox,top=list[0]?.word;
+ marks.push({id:'outbox',shape:'frame',x:ox,y:A.y,w:ow,h:A.h-4,color:'muted',level:.7,delay:100,from:{x:ox,y:A.bottom}});
+ texts.push({key:'outt',text:'output',x:ox+10,y:A.y+size*1.2,size:px(A,11),color:'muted'});
+ let x=ox+10,y=A.y+size*2.8;
+ for(const [i,w] of D.words(c.focus?.text).slice(0,60).entries()){const wpx=span(w.text)*size*.6+size*.5;if(x+wpx>A.right-8){x=ox+10;y+=size*1.6;}if(y>A.bottom-10)break;const hot=w.text.toLowerCase().includes(top||'\u0000');texts.push({key:'o'+w.index,text:w.text,x,y,size,color:hot?'accent':'ink',level:hot?1:.75,delay:300+i*35});x+=wpx;}
+ return {marks,baseline:A.bottom,caption:'条 = 关键词在本轮出现次数的占比，不是模型概率 · 右侧为当前片段',texts:[...head(c,'next_token · share',null,`${list.length} keywords · ${sum} hits`),...texts]};
+}
+
+function errorbig(c){
+ // Errors take the whole stage: a big red word and the real message below.
+ const A=area(c.box),word=c.focus?.kind==='retry'?'RETRY':'ERROR',size=Math.floor(Math.min(A.h*.42,A.w*.8/(word.length*.62))),step=Math.max(4,Math.round(size/22));
+ const raster=c.box.raster?.(word,size,step),marks=[];
+ if(raster){const ox=A.x+(A.w-raster.w)/2,oy=A.y+px(A,6);raster.points.forEach((p,i)=>marks.push({id:'e'+i,x:ox+p.x,y:oy+p.y,w:step-1,h:step-1,color:'danger',level:.95,delay:Math.abs(p.x-raster.w/2)/2,from:{x:ox+p.x,y:A.bottom}}));}
+ const msg=wrap(c.focus?.text||'',Math.floor(A.w/(px(A,13)*.6)),5),small=px(A,13),top=A.y+(raster?raster.h:A.h*.4)+px(A,24);
+ const texts=[{key:'x0',text:`Exception in turn ${c.focus?.turn??''}: ${c.focus?.label||''}`,x:A.x,y:top,size:small,color:'danger',delay:300},...msg.map((l,i)=>({key:'x'+(i+1),text:'    at '+l,x:A.x,y:top+(i+1)*small*1.6,size:small,color:'danger',level:.8,delay:400+i*100}))];
+ return {marks,baseline:A.bottom,caption:'运行错误 / 重试的原文',texts:[...head(c,'stderr',null,word.toLowerCase()),...texts]};
+}
+
+const BUILDERS={idle,glyph,bars,curve,cloud,mask,grid,compare,boot,exec,redline,code,formula,compose,table,tokenizer,agentloop,diff,spiral,nexttoken,errorbig};
 function buildFigure(id,context){
  const make=BUILDERS[id]||bars,spec=make(context);
  return {figure:id,title:TITLES[id]||id,caption:CAPTIONS[id]||'',marks:[],texts:[],live:[],...spec};
 }
-module.exports={buildFigure,TITLES,CAPTIONS,wrap,area,FIGURES:Object.keys(BUILDERS)};
+module.exports={buildFigure,TITLES,CAPTIONS,wrap,area,fit,span,FIGURES:Object.keys(BUILDERS)};

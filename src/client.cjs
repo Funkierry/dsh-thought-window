@@ -91,7 +91,7 @@ class Boundary extends React.Component {
 const inject=['slots'];
 function apply(ctx){
   const host=createHostBridge(ctx);
-  ctx.effect(()=>{const style=document.createElement('style');style.dataset.thoughtWindow='0.7.0';style.textContent=css;document.head.appendChild(style);return()=>style.remove();});
+  ctx.effect(()=>{const style=document.createElement('style');style.dataset.thoughtWindow='0.10.1';style.textContent=css;document.head.appendChild(style);return()=>style.remove();});
   ctx.slots.inject('conversation.input.left',function*(){
     yield ctx.slots.register({name:'conversation.input.left',id:'thought-window',order:90},props=>h(Boundary,null,h(Controller,{...props,host})));
   });

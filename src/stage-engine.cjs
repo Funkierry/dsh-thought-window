@@ -27,11 +27,49 @@ function raster(text,size,step){
  if(rasterCache.size>40)rasterCache.clear();
  rasterCache.set(key,out);return out;
 }
+// Whole-figure actions for the director's actor: a pose per moment (offset,
+// scale, rotation about the feet, per-row sway) applied to every particle of
+// the group at draw time, so the drawing itself never has to be rebuilt.
+function pose(type,sec,size,span){
+ const p={dx:0,dy:0,sx:1,sy:1,rot:0,sway:0,scatter:0},TAU=Math.PI*2;
+ switch(type){
+  case 'dance':{const b=sec*2.2;p.rot=.16*Math.sin(b*Math.PI);p.dy=-Math.abs(Math.sin(b*Math.PI))*size*.1;p.sx=1+.07*Math.sin(b*TAU);p.sy=1-.07*Math.sin(b*TAU);p.sway=.07*Math.sin(b*Math.PI);break;}
+  case 'jump':{const u=(sec*1.25)%1;p.dy=-4*u*(1-u)*size*.42;p.sy=u<.08||u>.94?.86:1.04;p.sx=1/p.sy;break;}
+  case 'happy':{const u=(sec*2.4)%1;p.dy=-4*u*(1-u)*size*.16;p.rot=.06*Math.sin(sec*9);break;}
+  case 'spin':p.sx=Math.cos(sec*3.4);break;
+  case 'wave':p.rot=.1*Math.sin(sec*6);p.sway=.04*Math.sin(sec*6);break;
+  case 'nod':p.rot=.12*Math.max(0,Math.sin(sec*5));break;
+  case 'shake':p.dx=Math.sin(sec*42)*size*.035;break;
+  case 'think':p.dy=-Math.sin(sec*1.6)*size*.03;p.rot=.05*Math.sin(sec*.8);break;
+  case 'sleep':p.rot=.12;p.sy=1+.03*Math.sin(sec*1.3);break;
+  case 'sad':p.sy=.9;p.sx=1.04;p.rot=-.05;p.dy=Math.sin(sec*1.2)*2;break;
+  case 'surprised':{const u=(sec*.7)%1;p.dy=u<.15?-Math.sin(u/.15*Math.PI)*size*.25:0;p.sy=u<.15?1.08:1;p.dx=u>=.15&&u<.3?Math.sin(sec*50)*3:0;break;}
+  case 'walk':{const a=sec*.55;p.dx=Math.sin(a)*span*.3;p.sx=Math.cos(a)>=0?1:-1;p.dy=-Math.abs(Math.sin(sec*6))*size*.04;p.rot=.05*Math.sin(sec*6);break;}
+  case 'grow':{const k=1+.14*Math.sin(sec*2.2);p.sx=k;p.sy=k;break;}
+  case 'type':p.dy=-Math.abs(Math.sin(sec*11))*2;p.rot=.03*Math.sin(sec*5.5);break;
+  case 'explode':p.scatter=Math.max(0,Math.sin(sec*1.3))**3;break;
+  case 'float':p.dy=Math.sin(sec*2.2)*size*.12;p.rot=.08*Math.sin(sec*1.3);break;
+  case 'bob':p.dy=-Math.abs(Math.sin(sec*3))*size*.15;break;
+  case 'none':break;
+  case 'turn':p.rot=sec*.32;break;
+  default:p.dy=-Math.abs(Math.sin(sec*1.9))*size*.025;p.sy=1+.025*Math.sin(sec*1.9);
+ }
+ return p;
+}
+function place(act,s,p,t){
+ const q=pose(act.type,(t-act.t0)/1000,act.size||100,act.span||300);
+ let rx=(s.x+s.w/2-act.cx)*q.sx,ry=(s.y+s.h/2-act.cy)*q.sy;
+ rx+=q.sway*ry;
+ if(q.scatter){const d=Math.hypot(rx,ry)||1;rx+=(rx/d+(noise(p.n,5)-.5))*q.scatter*act.size*.7;ry+=(ry/d+(noise(p.n,6)-.5))*q.scatter*act.size*.7;}
+ const c=Math.cos(q.rot),n=Math.sin(q.rot),w=s.w*Math.abs(q.sx),h=s.h*q.sy;
+ return {x:act.cx+rx*c-ry*n+q.dx-w/2,y:act.cy+rx*n+ry*c+q.dy-h/2,w,h};
+}
 function createEngine(canvas,options={}){
  const ctx=canvas.getContext('2d');
  const scene=document.createElement('canvas'),sctx=scene.getContext('2d');
  const glow=document.createElement('canvas'),gctx=glow.getContext('2d');
- let w=1,h=1,dpr=1,colors={},dark=true,particles=[],texts=new Map(),live=[],spin=null,key=null,builder=null,spec=null;
+ let w=1,h=1,dpr=1,colors={},dark=true,particles=[],texts=new Map(),live=[],spin=null,acts=new Map(),key=null,builder=null,spec=null;
+ const transparent=!!options.transparent;
  let animate=options.animate!==false,motion=options.motion||'rich',raf=0,last=0,dead=false,serial=0,settle=0,born=performance.now();
  const now=()=>performance.now();
  const speed=()=>motion==='calm'?.55:1;
@@ -46,7 +84,9 @@ function createEngine(canvas,options={}){
   return {x:lerp(a.x,b.x,e),y:lerp(a.y,b.y,e),w:lerp(a.w,b.w,e),h:lerp(a.h,b.h,e),l:lerp(a.l,b.l,u<0?0:e)};
  }
  const target=m=>({x:m.x,y:m.y,w:m.w??4,h:m.h??4,l:m.level??.8});
- function assign(p,m){p.id=m.id;p.ref=m.ref;p.shape=m.shape||'rect';p.ch=m.ch;p.color=m.color||'ink';p.blink=!!m.blink;p.z=m.z||0;p.dying=false;}
+ function assign(p,m){p.id=m.id;p.ref=m.ref;p.shape=m.shape||'rect';p.ch=m.ch;p.color=m.color||'ink';p.blink=!!m.blink;p.z=m.z||0;p.group=m.group;p.dying=false;}
+ // Theme names or literal #rrggbb (sprite palettes come from the director).
+ const paint=c=>colors[c]||(typeof c==='string'&&/^#[0-9a-f]{6}$/i.test(c)?c:colors.ink);
  function apply(next,instant){
   const t=now(),k=speed(),still=instant||!animate;
   const marks=(next.marks||[]).slice(0,3200);
@@ -71,14 +111,15 @@ function createEngine(canvas,options={}){
     else if(moved||!next.sameKey){p.a=cur;p.b=b;p.t0=t+(next.sameKey?0:80+delay*.6);p.dur=(next.sameKey?520:950)*k;}
     out.push(p);
    }else{
-    const b=target(m),f=m.from||{x:m.x,y:next.baseline??h};
-    const p={n:serial++,a:still?b:{x:f.x,y:f.y,w:b.w,h:b.h,l:0},b,t0:t+delay,dur:still?0:760*k};
+    const b=target(m),f=m.pop?b:m.from||{x:m.x,y:next.baseline??h};
+    const p={n:serial++,a:still?b:{x:f.x,y:f.y,w:b.w,h:b.h,l:0},b,t0:m.pop?t:t+delay,dur:still?0:m.pop?110:760*k};
     assign(p,m);out.push(p);
    }
   }
   for(const p of alive)if(!used.has(p)){
    const cur=state(p,t);p.dying=true;p.ref=null;
    if(still)continue;
+   if(next.swap){p.a=cur;p.b={...cur,l:0};p.t0=t;p.dur=110;out.push(p);continue;}
    p.a=cur;p.b={x:cur.x+(noise(p.n,1)-.5)*14,y:cur.y+18+noise(p.n,2)*46,w:Math.max(1,cur.w*.4),h:Math.max(1,cur.h*.4),l:0};p.t0=t+noise(p.n,3)*160;p.dur=560*k;p.shape=p.shape==='glyph'?'glyph':'dot';
    out.push(p);
   }
@@ -90,9 +131,12 @@ function createEngine(canvas,options={}){
    texts.set(s.key,{spec:s,value,from:old?.dying?null:old?.shown||'',fromValue:old?.value??0,t0:still?-1e9:t+(s.delay||0)*k,dying:false});
   }
   for(const [name,item] of texts)if(!seen.has(name)){if(still||item.dying)texts.delete(name);else{item.dying=true;item.t0=t;}}
-  live=(next.live||[]).map(x=>({...x,t0:t}));
+  live=(next.live||[]).map((x,i)=>({...x,t0:live[i]?.type===x.type?live[i].t0:t}));
   spin=next.spin?{...next.spin,t0:spin?.t0??t}:null;
-  settle=t+(still?0:2600*k+Math.max(0,...marks.map(m=>m.delay||0))*k);
+  // One action per group (actor, props); an unchanged action keeps its clock.
+  acts=new Map((next.motions||(next.motion?[next.motion]:[])).map(m=>{const old=acts.get(m.group);return [m.group,{...m,t0:old?.type===m.type?old.t0:t}];}));
+  // A pose-frame swap is not a new drawing: it must not restart the afterimage.
+  settle=next.swap?Math.min(settle,t+150):t+(still?0:2600*k+Math.max(0,...marks.map(m=>m.delay||0))*k);
   wake();
  }
  function drawParticle(p,t){
@@ -104,18 +148,21 @@ function createEngine(canvas,options={}){
   if(level<=.01)return;
   let x=s.x;
   if(spin&&!p.dying){const a=(t-spin.t0)/1000*spin.speed,dx=s.x-spin.cx;x=spin.cx+dx*Math.cos(a)+p.z*Math.sin(a);level*=.65+.35*clamp(.5+(p.z*Math.cos(a)-dx*Math.sin(a))/160);}
+  let y=s.y,pw=s.w,ph=s.h;
+  const act=p.group&&!p.dying&&acts.get(p.group);
+  if(act){const q=place(act,s,p,t);x=q.x;y=q.y;pw=q.w;ph=q.h;}
   sctx.globalAlpha=clamp(level);
-  const color=colors[p.color]||colors.ink;
-  if(p.shape==='glyph'){sctx.fillStyle=color;sctx.font=`${Math.max(8,Math.round(s.h*.9))}px ${FONT}`;sctx.textAlign='center';sctx.fillText(p.ch||'·',x+s.w/2,s.y+s.h*.8);return;}
-  if(p.shape==='frame'){sctx.strokeStyle=color;sctx.lineWidth=1;sctx.strokeRect(Math.round(x)+.5,Math.round(s.y)+.5,s.w,s.h);return;}
+  const color=paint(p.color);
+  if(p.shape==='glyph'){sctx.fillStyle=color;sctx.font=`${Math.max(8,Math.round(ph*.9))}px ${FONT}`;sctx.textAlign='center';sctx.fillText(p.ch||'·',x+pw/2,y+ph*.8);return;}
+  if(p.shape==='frame'){sctx.strokeStyle=color;sctx.lineWidth=1;sctx.strokeRect(Math.round(x)+.5,Math.round(y)+.5,pw,ph);return;}
   sctx.fillStyle=color;
   if(p.shape==='cell'){
-   sctx.globalAlpha=clamp(level*.9);sctx.fillRect(x,s.y,s.w,s.h);
-   sctx.globalAlpha=clamp(s.l);sctx.strokeStyle=color;sctx.lineWidth=1;sctx.strokeRect(Math.round(x)+.5,Math.round(s.y)+.5,s.w-1,s.h-1);
-   if(p.ch&&s.h>=10){sctx.fillStyle=level>.55?colors.paper:colors.ink;sctx.globalAlpha=clamp(s.l*1.1);sctx.font=`${Math.round(Math.min(s.h*.62,s.w*.72))}px ${FONT}`;sctx.textAlign='center';sctx.fillText(p.ch,x+s.w/2,s.y+s.h*.72);}
+   sctx.globalAlpha=clamp(level*.9);sctx.fillRect(x,y,pw,ph);
+   sctx.globalAlpha=clamp(s.l);sctx.strokeStyle=color;sctx.lineWidth=1;sctx.strokeRect(Math.round(x)+.5,Math.round(y)+.5,pw-1,ph-1);
+   if(p.ch&&ph>=10){sctx.fillStyle=level>.55?colors.paper:colors.ink;sctx.globalAlpha=clamp(s.l*1.1);sctx.font=`${Math.round(Math.min(ph*.62,pw*.72))}px ${FONT}`;sctx.textAlign='center';sctx.fillText(p.ch,x+pw/2,y+ph*.72);}
    return;
   }
-  sctx.fillRect(x,s.y,s.w,s.h);
+  sctx.fillRect(x,y,pw,ph);
  }
  function drawText(item,t){
   const s=item.spec;
@@ -137,15 +184,22 @@ function createEngine(canvas,options={}){
   }
   if(!text)return true;
   item.shown=text;
-  sctx.globalAlpha=clamp(alpha);sctx.fillStyle=colors[s.color]||colors.ink;
+  sctx.globalAlpha=clamp(alpha);sctx.fillStyle=paint(s.color);
   sctx.font=`${s.weight||400} ${s.size||12}px ${FONT}`;sctx.textAlign=s.align||'left';
   sctx.fillText(text,s.x,s.y);
   return true;
  }
  function drawLive(item,t){
-  const color=colors[item.color||'accent'];
+  const color=paint(item.color||'accent');
   if(item.type==='sweep'){const u=((t-item.t0)/item.period)%1,x=lerp(item.x0,item.x1,u);sctx.globalAlpha=.85;sctx.fillStyle=color;sctx.fillRect(x,item.y0,1.5,item.y1-item.y0);sctx.globalAlpha=.18;sctx.fillRect(x-10,item.y0,10,item.y1-item.y0);}
   else if(item.type==='cursor'){if(Math.floor((t-born)/530)%2)return;sctx.globalAlpha=.9;sctx.fillStyle=color;sctx.fillRect(item.x,item.y,item.w||7,item.h||13);}
+  else if(item.type==='float'){
+   // Effects drift up from an anchor and fade: notes, hearts, sparkles, zzz...
+   const glyphs=item.glyphs||['*'],n=item.count||6;sctx.fillStyle=color;sctx.textAlign='center';
+   for(let i=0;i<n;i++){const u=(((t-item.t0)/(item.period||2400))+i/n)%1,gx=item.x+(i-(n-1)/2)*(item.spread||14)+Math.sin(u*6+i)*8,gy=item.y-u*(item.rise||60);sctx.globalAlpha=Math.sin(u*Math.PI)*.95;sctx.font=`${item.size||16}px ${FONT}`;sctx.fillText(glyphs[i%glyphs.length],gx,gy);}
+  }
+  else if(item.type==='rain'){sctx.fillStyle=color;for(let i=0;i<14;i++){const u=(((t-item.t0)/900)+noise(i,1))%1;sctx.globalAlpha=.55*(1-u);sctx.fillRect(item.x0+noise(i,2)*(item.x1-item.x0),item.y0+u*(item.y1-item.y0),1.5,8);}}
+  else if(item.type==='dots'){sctx.fillStyle=color;for(let i=0;i<3;i++){sctx.globalAlpha=.35+.65*Math.max(0,Math.sin((t-item.t0)/220-i*.9));sctx.fillRect(item.x+i*(item.gap||9),item.y,item.size||5,item.size||5);}}
   else if(item.type==='ring'){const u=((t-item.t0)%1400)/1400;sctx.globalAlpha=.8*(1-u);sctx.strokeStyle=color;sctx.lineWidth=1.5;sctx.beginPath();sctx.arc(item.x,item.y,item.r*(.4+u),0,Math.PI*2);sctx.stroke();sctx.globalAlpha=.9;sctx.fillStyle=color;sctx.fillRect(item.x-2,item.y-2,4,4);}
  }
  function draw(t){
@@ -153,7 +207,9 @@ function createEngine(canvas,options={}){
   sctx.globalCompositeOperation='source-over';
   // Afterimage: fade the previous frame toward the paper colour instead of clearing it.
   // A full clear once settled: 8-bit fading alone never reaches the paper colour.
-  sctx.globalAlpha=animate&&motion==='rich'&&t<settle?.42:1;sctx.fillStyle=colors.paper;sctx.fillRect(0,0,w,h);
+  const trail=animate&&motion==='rich'&&t<settle;
+  if(transparent){if(trail){sctx.globalCompositeOperation='destination-out';sctx.globalAlpha=.58;sctx.fillRect(0,0,w,h);sctx.globalCompositeOperation='source-over';}else sctx.clearRect(0,0,w,h);}
+  else{sctx.globalAlpha=trail?.42:1;sctx.fillStyle=colors.paper;sctx.fillRect(0,0,w,h);}
   sctx.textBaseline='alphabetic';
   for(const p of particles)drawParticle(p,t);
   if(particles.length>3600||t>settle)particles=particles.filter(p=>!p.dying||t<p.t0+p.dur);
@@ -170,8 +226,8 @@ function createEngine(canvas,options={}){
   raf=0;if(dead)return;
   const t=now(),busy=t<settle;
   // Full rate while drawings move; a calmer rate for blinking and flicker.
-  if(busy||t-last>=66){draw(t);last=t;}
-  if(animate&&!document.hidden&&(busy||live.length||spin||motion==='rich'||particles.some(p=>p.blink)))raf=requestAnimationFrame(frame);
+  if(busy||acts.size||t-last>=66){draw(t);last=t;}
+  if(animate&&!document.hidden&&(busy||acts.size||live.length||spin||motion==='rich'||particles.some(p=>p.blink)))raf=requestAnimationFrame(frame);
  }
  function wake(){if(!raf&&!dead){if(animate)raf=requestAnimationFrame(frame);else{draw(now()+1e7);}}}
  function measure(){
@@ -206,4 +262,4 @@ function createEngine(canvas,options={}){
   destroy(){dead=true;if(raf)cancelAnimationFrame(raf);document.removeEventListener('visibilitychange',visibility);}
  };
 }
-module.exports={createEngine,raster};
+module.exports={createEngine,raster,pose};

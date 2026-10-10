@@ -72,9 +72,9 @@ const phaseOf=kind=>PHASES[kind]||['01','THINK'];
 // Figure choice is a pure function of the queue position, so a streaming
 // sentence keeps its drawing. Kinds with several drawings alternate along a
 // run of the same kind; plain reasoning rotates through the measurements.
-const BY_KIND={input:['glyph'],plan:['grid','bars'],compare:['compare','cloud'],search:['cloud','mask'],code:['code'],math:['formula'],check:['boot','mask'],revise:['redline'],error:['redline'],retry:['redline'],request:['exec'],result:['exec'],answer:['compose']};
-const ROTATION=['bars','curve','cloud','mask','grid'];
-const NEEDS={cloud:4,mask:5,curve:2,grid:2};
+const BY_KIND={input:['glyph'],plan:['agentloop','grid','bars'],constraint:['agentloop','tokenizer'],compare:['nexttoken','compare','cloud'],search:['cloud','tokenizer','mask'],code:['code'],math:['formula','spiral'],check:['boot','mask','agentloop'],revise:['diff','redline'],error:['errorbig'],retry:['errorbig','diff'],request:['exec','agentloop'],result:['exec','agentloop'],answer:['compose']};
+const ROTATION=['tokenizer','spiral','bars','nexttoken','curve','cloud','mask','grid'];
+const NEEDS={cloud:4,mask:5,curve:2,grid:2,nexttoken:3};
 function baseFigure(entries,index){
  const entry=entries[index];
  if(!entry)return 'idle';

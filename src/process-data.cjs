@@ -31,7 +31,20 @@ function role(text){
  if(/^(?:公式|推导|\$|\\\[)/.test(head))return 'math';
  return classifyScene(text).id;
 }
-function buildProcess(graph){
+// Coarse reading steps for the stage: neighbouring sentences merge until a step
+// holds ~160 characters; code fences stay whole. Boundaries depend only on the
+// prefix, so a streaming paragraph only ever extends its last step.
+const COARSE=160;
+function coarseSlices(source){
+ const out=[];
+ for(const part of slices(source)){
+  const last=out.at(-1),fenced=/```/.test(part.text);
+  if(last&&!fenced&&!last.fenced&&last.end-last.start<COARSE)Object.assign(last,{end:part.end,text:source.slice(last.start,part.end)});
+  else out.push({...part,fenced});
+ }
+ return out.map(({start,end,text})=>({start,end,text}));
+}
+function buildProcess(graph,{coarse=false}={}){
  const nodes=turnNodes(graph),entries=[],groups=[];
  for(const node of nodes){
   const reasoning=['reasoning','compare','check','revise'].includes(node.kind);
@@ -55,7 +68,7 @@ function buildProcess(graph){
    if(separator>=0)emit({start:separator+5,end:group.text.length,text:group.text.slice(separator+5)},'result','result');
   }else{
    const kind=group.reasoning?null:({input:'input',answer:'answer',error:'error',retry:'retry'})[node.kind]||'analysis';
-   const parts=node.kind==='input'?[{start:0,end:group.text.length,text:group.text}]:slices(group.text);
+   const parts=node.kind==='input'?[{start:0,end:group.text.length,text:group.text}]:(coarse&&group.reasoning?coarseSlices:slices)(group.text);
    parts.forEach(part=>emit(part,kind||role(part.text)));
   }
  }
@@ -82,4 +95,4 @@ function boardEntries(entries,index){
  }
  const start=Math.max(0,index-3);return entries.slice(start,start+6);
 }
-module.exports={OPS,LIMIT,slices,buildProcess,mergeQueue,dwellMs,formFor,boardEntries};
+module.exports={OPS,LIMIT,slices,coarseSlices,buildProcess,mergeQueue,dwellMs,formFor,boardEntries};

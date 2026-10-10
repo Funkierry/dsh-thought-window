@@ -8,8 +8,8 @@ const short=(text,n=100)=>Array.from(String(text||'').replace(/\s+/g,' ').trim()
 const titles={register:'source.register / 内容寄存器',pipeline:'plan.sequence / 步骤序列',branches:'options.compare / 并列阅读',io:'tool.exchange / 请求与返回',code:'source.code / 代码原文',formula:'formula.extract / 公式原文',checklist:'verification.log / 核验记录',revision:'revision.log / 修正记录',sources:'source.index / 资料索引'};
 // Receiving and reading are separate: new pieces queue up and each one stays
 // at least `seconds` (longer for long text). Shared by every reading view.
-function useReadingQueue({graph,replaying=false,suspended=false}){
- const derived=useMemo(()=>buildProcess(graph),[graph]);
+function useReadingQueue({graph,replaying=false,suspended=false,coarse=false}){
+ const derived=useMemo(()=>buildProcess(graph,{coarse}),[graph,coarse]);
  const [queue,setQueue]=useState(derived),[active,setActive]=useState(derived.entries[0]?.id||null);
  const [playing,setPlaying]=useState(!replaying),[seconds,setSeconds]=useState(()=>[5,8,12].includes(readPref())?readPref():8);
  const [tick,setTick]=useState(0);

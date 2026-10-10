@@ -2,12 +2,14 @@
    conversation root; the native chat shows through the framed "dsh · web" hole
    (pointer-events pass through), the rest is the stage. Row/column sizes here
    and the root padding below must agree. */
-.tw-native-shell.tw-stage-shell{padding:52px calc(var(--tw-panel-width) + 10px) 108px 20px!important}
+.tw-native-shell.tw-stage-shell{padding:112px calc(var(--tw-panel-width) + 10px) 132px 20px!important}
 .tw-native-shell.tw-stage-shell>.tw-mount{inset:0!important;width:auto!important;height:auto!important;border:0!important;pointer-events:none;background:transparent}
 .tw-native-shell.tw-stage-shell>.tw-divider{top:40px;bottom:98px;right:calc(var(--tw-panel-width) - 10px)}
 .tw-stage-shell .tw-window.tw-layout-stage{background:transparent;pointer-events:none}
 .tw-stage-shell .tw-stage>:not(.tw-stage-chat),.tw-stage-shell .tw-layout-stage>.tw-source{pointer-events:auto}
-body.tw-stage-host [data-rightbar-collapsed=true]{grid-template-columns:0 minmax(0,1fr) 0!important}
+/* overflow:clip, not hidden: the hidden sidebar's content must never scroll the frame sideways. */
+body.tw-stage-host [data-rightbar-collapsed=true]{grid-template-columns:0 minmax(0,1fr) 0!important;overflow:clip!important}
+body.tw-stage-host [data-rightbar-collapsed=true]>[class*="_handle"]{display:none!important}
 body.tw-stage-host :has(>[data-slot=sidebar]){visibility:hidden;overflow:hidden;min-width:0}
 
 .tw-stage{position:relative;flex:1;min-height:0;height:100%;display:grid;grid-template-columns:minmax(0,1fr) 96px;grid-template-rows:26px minmax(0,1fr) 62px 14px;grid-template-areas:"top top" "main ops" "out out" "credit credit";gap:8px 10px;padding:6px 10px;color:var(--ink);font:11px/1.4 Consolas,'SFMono-Regular','Microsoft YaHei',monospace}
@@ -88,3 +90,43 @@ body.tw-stage-host :has(>[data-slot=sidebar]){visibility:hidden;overflow:hidden;
 @container thought (max-width:520px){.tw-stage-prompt,.tw-stage-wave,.tw-stage-read{display:none}.tw-stage{grid-template-columns:minmax(0,1fr) 64px}}
 .tw-no-motion .tw-token,.tw-no-motion .tw-stage-caret,.tw-no-motion .tw-stage-status{animation:none!important}
 @media(prefers-reduced-motion:reduce){.tw-stage *{animation:none!important}}
+
+/* 0.8 actor layer: the director's character in front, measurements dimmed behind. */
+.tw-stage-front{pointer-events:none}
+.tw-stage-back{transition:opacity .5s}.tw-stage[data-scene=actor] .tw-stage-back{opacity:0}
+.tw-stage-caption[data-director=error]{color:var(--danger)}
+.tw-stage-caption[data-director=pending]{color:var(--accent)}
+
+/* 0.9 chat pane, after the reference: avatar header, rounded navy bubbles,
+   a rounded composer and a round/step line. DSH's own header row is hidden;
+   its tabs are driven from the stage header. */
+.tw-native-shell.tw-stage-shell>[class*="_header"]{display:none!important}
+.tw-stage-shell [data-conversation-scroll]{background:#0a1122!important;font-family:"PingFang SC","Microsoft YaHei","Segoe UI",system-ui,sans-serif;--dsh-content-font-size:15px}
+.tw-stage-shell [data-conversation-scroll] [class*="_bubble"]{border-radius:16px!important;border:0!important;background:#1c2950!important;color:#e8eeff!important;padding:9px 16px!important}
+.tw-stage-shell [data-composer-card]{border-radius:18px!important;background:#111a30!important;border:1px solid #24345e!important;box-shadow:0 8px 22px #0007!important}
+.tw-chat-head{position:absolute;left:12px;right:12px;top:12px;height:54px;display:flex;align-items:center;gap:12px;padding-bottom:10px;border-bottom:1px solid color-mix(in srgb,var(--line) 70%,transparent);pointer-events:none;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif}
+.tw-chat-avatar{flex:none;border-radius:8px;background:radial-gradient(circle at 50% 40%,#22336a,#0d1530);image-rendering:pixelated;box-shadow:0 0 0 1px #2b3c70}
+.tw-chat-who{display:flex;flex-direction:column;gap:3px;min-width:0}
+.tw-chat-who b{font-size:16px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tw-chat-who small{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px}
+.tw-chat-who small i{width:7px;height:7px;border-radius:50%;background:#e9b949;flex:none}
+.tw-chat-who small[data-phase=done] i,.tw-chat-who small[data-phase=idle] i{background:#5fd38d}
+.tw-chat-who small[data-phase=think] i,.tw-chat-who small[data-phase=answer] i{animation:tw-blink 1.2s steps(2,end) infinite}
+.tw-chat-tabs{margin-left:auto;display:flex;gap:2px;pointer-events:auto}
+.tw-window .tw-chat-tabs button{border:0;background:transparent;font-size:12px;padding:3px 8px;color:var(--muted);border-radius:6px}
+.tw-window .tw-chat-tabs button[aria-pressed=true]{background:#1c2950;color:var(--ink)}
+.tw-chat-foot{position:absolute;left:0;right:0;bottom:7px;text-align:center;font-size:12px;color:var(--muted);pointer-events:none;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif}
+
+/* 0.10 opening sequence over the whole stage, then the frames grow from a point. */
+.tw-intro{position:absolute;inset:0;z-index:50;background:var(--paper);pointer-events:auto;cursor:pointer;transition:opacity .45s}
+.tw-stage-shell .tw-stage>.tw-intro{pointer-events:auto}
+.tw-intro-leaving{opacity:0}
+.tw-intro-canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.tw-intro-skip{position:absolute;right:18px;bottom:12px;font-size:10px;color:var(--muted);letter-spacing:.6px}
+.tw-stage[data-boot=intro]>:not(.tw-intro){visibility:hidden}
+.tw-stage[data-boot=ready]>:is(.tw-stage-top,.tw-stage-chat,.tw-stage-main,.tw-stage-ops,.tw-stage-out,.tw-stage-credit){animation:tw-frame-in .7s steps(7,end) both}
+.tw-stage[data-boot=ready]>.tw-stage-chat{animation-delay:.1s}.tw-stage[data-boot=ready]>.tw-stage-main{animation-delay:.2s}.tw-stage[data-boot=ready]>.tw-stage-ops{animation-delay:.3s}.tw-stage[data-boot=ready]>.tw-stage-out{animation-delay:.35s}
+@keyframes tw-frame-in{from{clip-path:inset(49% 49% 49% 49%);opacity:.2}to{clip-path:inset(-20px -20px -20px -20px);opacity:1}}
+/* During the opening the stage covers the native composer and the divider too. */
+.tw-native-shell>.tw-mount:has(.tw-intro){z-index:60}
+.tw-native-shell:has(.tw-intro)>.tw-divider{visibility:hidden}

@@ -13,7 +13,7 @@ function WorkSummary({work=EMPTY_WORK,onShow}){
 function PreviewDock({work=EMPTY_WORK,preview,onExpand,onWork}){
  const latest=work.runs.at(-1),file=work.files.at(-1);
  return h('div',{className:'tw-preview-summary','aria-label':'成果预览伴随条'},
-  h('div',null,h('span',{className:'tw-dock-mark'},'▦'),h('strong',null,'THOUGHT WINDOW'),h('small',null,'0.7.0 / 成果模式'),h('span',{className:'tw-spacer'}),h('button',{type:'button',onClick:onExpand},'展开过程'),h('button',{type:'button',onClick:onWork},'成果 / 运行')),
+  h('div',null,h('span',{className:'tw-dock-mark'},'▦'),h('strong',null,'THOUGHT WINDOW'),h('small',null,'0.10.1 / 成果模式'),h('span',{className:'tw-spacer'}),h('button',{type:'button',onClick:onExpand},'展开过程'),h('button',{type:'button',onClick:onWork},'成果 / 运行')),
   h('div',{className:'tw-preview-now'},h('span',null,'VIEW'),h('strong',{title:preview.path},basename(preview.path)||'原生预览'),h('small',null,work.files.length+' 文件 · '+work.runs.length+' 次调用')),
   h('div',{className:'tw-preview-last','data-status':latest?.status},h('span',null,latest?'RUN':file?'FILE':'TRACE'),h('span',{title:latest?.command||file?.path||''},latest?latest.label+' · '+latest.command:file?fileLabel(file)+' · '+file.name:'预览期间暂停逐条阅读，展开后继续。')));
 }
